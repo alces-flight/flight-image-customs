@@ -46,6 +46,9 @@ cat << EOF >> /opt/flight/etc/desktop-restapi.local.yaml
 command_timeout: 180
 EOF
 
+#allow generation of root user ssh keys
+sed -i 's/flight_SSH_LOWEST_UID=.*/flight_SSH_LOWEST_UID=0/g;s/flight_SSH_SKIP_USERS=.*/flight_SSH_SKIP_USERS="none"/g' /opt/flight/etc/setup-sshkey.rc
+
 #prepare the openflight-slurm-standalone spin
 flight profile prepare openflight-slurm-standalone
 
