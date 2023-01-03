@@ -55,7 +55,7 @@ flight profile prepare openflight-slurm-standalone
 echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
 
 #cloudinit overrides
-cat << "EOF" > /etc/cloud/cloud.cfg.d/solo2.cfg
+cat << "EOF" > /etc/cloud/cloud.cfg.d/50_solo2.cfg
 system_info:
   default_user:
     name: flight
@@ -69,3 +69,139 @@ firewall-offline-cmd --add-service http
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
 dnf makecache
+
+#mutlinode stuff
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.6-1.el8.x86_64.rpm
+
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.1.2-1.el8.x86_64.rpm
+
+cat << EOF > /opt/flight/opt/hunter/etc/config.yml
+port: 8888
+autorun_mode: hunt
+include_self: true
+payload_file: /opt/flight/opt/gather/var/data.yml
+EOF
+
+firewall-offline-cmd --add-port 8888/tcp 
+
+cat << "EOF" > /etc/cloud/cloud.cfg.d/99_flightgather.cfg
+merge_how:
+ - name: list
+   settings: [append]
+ - name: dict
+   settings: [no_replace, recurse_list]
+runcmd:
+  - /opt/flight/bin/flight gather collect
+EOF
+
+cat << "EOF" > /etc/cloud/cloud.cfg.d/96_flighthunt.cfg
+merge_how:
+ - name: list
+   settings: [append]
+ - name: dict
+   settings: [no_replace, recurse_list]
+runcmd:
+  - "IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`; echo \"target_host: ${IP}\" >> /opt/flight/opt/hunter/etc/config.yml"
+  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -f /opt/flight/opt/gather/var/data.yml; fi
+EOF
+
+flight service enable hunter
+
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.1-1.el8.x86_64.rpm 
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.3-1.noarch.rpm
+dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
+
+flight profile prepare openflight-slurm-multinode
+
+cat << EOF >> /opt/flight/opt/profile/etc/config.yml
+use_hunter: true
+EOF
+
+cat << 'EOF' > /usr/lib/systemd/system/flight-service.service
+# =============================================================================
+# Copyright (C) 2020-present Alces Flight Ltd.
+#
+# This file is part of Flight Service.
+#
+# This program and the accompanying materials are made available under
+# the terms of the Eclipse Public License 2.0 which is available at
+# <https://www.eclipse.org/legal/epl-2.0>, or alternative license
+# terms made available by Alces Flight Ltd - please direct inquiries
+# about licensing to licensing@alces-flight.com.
+#
+# Flight Service is distributed in the hope that it will be useful, but
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR
+# IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS
+# OF TITLE, NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A
+# PARTICULAR PURPOSE. See the Eclipse Public License 2.0 for more
+# details.
+#
+# You should have received a copy of the Eclipse Public License 2.0
+# along with Flight Service. If not, see:
+#
+#  https://opensource.org/licenses/EPL-2.0
+#
+# For more information on Flight Service, please visit:
+# https://github.com/openflighthpc/flight-service
+# ==============================================================================
+[Unit]
+Description=OpenFlightHPC services
+After=syslog.target
+After=network-online.target
+After=cloud-final.service
+
+[Service]
+# Workaround for https://bugs.ruby-lang.org/issues/12695
+Environment="HOME=/"
+Type=oneshot
+SyslogIdentifier=flight-service
+RemainAfterExit=true
+StandardOutput=journal
+
+ExecStart=/opt/flight/bin/flight service stack start
+ExecReload=/opt/flight/bin/flight service stack reload
+ExecStop=/opt/flight/bin/flight service stack stop
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=cloud-init.target
+EOF
+
+systemctl daemon-reload
+
+# Remove desktop access_host things which break connecting via web-suite
+sed -i '4,9d' /opt/flight/usr/lib/profile/types/openflight-slurm-multinode/run_env/openflight-slurm-multinode/roles/flightenv/tasks/main.yml
+
+# Set title page for flight web apps (still defaults to openflightHPC)
+echo "document:" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
+echo "  title: 'Flight Solo'" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
+flight landing-page compile # just in case it needs to be recompiled here and isn't in the playbook as part of setup
+
+#remove key generated on rpm install and do it another way....
+rm -v /opt/flight/etc/shared-secret.conf
+cat << "EOF" > /etc/cloud/cloud.cfg.d/95_flightpatches.cfg
+merge_how:
+ - name: list
+   settings: [append]
+ - name: dict
+   settings: [no_replace, recurse_list]
+runcmd:
+ - date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf; chmod 0400 /opt/flight/etc/shared-secret.conf; /opt/flight/bin/flight service stack restart
+EOF
+
+#patch to fix issue in gnome-terminal under flight desktops
+if ( grep -q '8.' /etc/redhat-release ); then
+  cat << EOF > /tmp/fp1.patch
+--- /opt/flight/usr/lib/desktop/types/gnome/session.sh.org	2022-08-26 11:20:43.000000000 +0000
++++ /opt/flight/usr/lib/desktop/types/gnome/session.sh	2022-12-01 17:53:00.399328587 +0000
+@@ -164,6 +164,7 @@
+   gnome_terminal_pid=$!
+ fi
+
++export LANG=en_US.UTF-8
+ gnome-session ${_GNOME_PARAMS} &
+ gnome_session_pid=$!  
+EOF
+patch -p0 /tmp/fp1.patch
+rm /tmp/fp1.patch
+fi
