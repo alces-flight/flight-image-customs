@@ -185,20 +185,3 @@ merge_how:
 runcmd:
  - date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf; chmod 0400 /opt/flight/etc/shared-secret.conf; /opt/flight/bin/flight service stack restart
 EOF
-
-#patch to fix issue in gnome-terminal under flight desktops
-if ( grep -q '8.' /etc/redhat-release ); then
-  cat << EOF > /tmp/fp1.patch
---- /opt/flight/usr/lib/desktop/types/gnome/session.sh.org	2022-08-26 11:20:43.000000000 +0000
-+++ /opt/flight/usr/lib/desktop/types/gnome/session.sh	2022-12-01 17:53:00.399328587 +0000
-@@ -164,6 +164,7 @@
-   gnome_terminal_pid=$!
- fi
-
-+export LANG=en_US.UTF-8
- gnome-session ${_GNOME_PARAMS} &
- gnome_session_pid=$!  
-EOF
-patch -p0 /tmp/fp1.patch
-rm /tmp/fp1.patch
-fi
