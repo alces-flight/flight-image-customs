@@ -169,9 +169,6 @@ EOF
 
 systemctl daemon-reload
 
-# Remove desktop access_host things which break connecting via web-suite
-sed -i '4,9d' /opt/flight/usr/lib/profile/types/openflight-slurm-multinode/run_env/openflight-slurm-multinode/roles/flightenv/tasks/main.yml
-
 # Set title page for flight web apps (still defaults to openflightHPC)
 echo "document:" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
 echo "  title: 'Flight Solo'" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
