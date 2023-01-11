@@ -169,11 +169,6 @@ EOF
 
 systemctl daemon-reload
 
-# Set title page for flight web apps (still defaults to openflightHPC)
-echo "document:" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
-echo "  title: 'Flight Solo'" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
-flight landing-page compile # just in case it needs to be recompiled here and isn't in the playbook as part of setup
-
 #remove key generated on rpm install and do it another way....
 rm -v /opt/flight/etc/shared-secret.conf
 cat << "EOF" > /etc/cloud/cloud.cfg.d/95_flightpatches.cfg
