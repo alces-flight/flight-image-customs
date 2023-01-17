@@ -24,7 +24,7 @@ dnf -y install flight-user-suite
 dnf -y install flight-web-suite
 dnf -y install python3-websockify xorg-x11-apps netpbm-progs
 
-dnf -y install alces-flight-landing-page-branding
+dnf -y install https://alces-flight.s3.eu-west-1.amazonaws.com/repos/alces-flight-dev/centos/8/x86_64/alces-flight-landing-page-branding-1.7.1-1.el8.x86_64.rpm
 
 dnf -y install flight-plugin-system-systemd-service
 
