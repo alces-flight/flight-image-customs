@@ -1,3 +1,7 @@
+# Version tag
+VERSION=flightsolo-2023.1
+echo $VERSION > /etc/solo-release
+
 #Repo
 cat << "EOF" > /etc/yum.repos.d/solo2.repo
 [openflight]
