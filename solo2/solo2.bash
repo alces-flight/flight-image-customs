@@ -80,6 +80,7 @@ port: 8888
 autorun_mode: hunt
 include_self: true
 payload_file: /opt/flight/opt/gather/var/data.yml
+auth_key: flight-solo
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
