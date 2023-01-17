@@ -113,6 +113,7 @@ dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/fli
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 
 flight profile prepare openflight-slurm-multinode
+flight profile prepare openflight-kubernetes-multinode
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
 use_hunter: true
