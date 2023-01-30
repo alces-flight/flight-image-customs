@@ -76,13 +76,13 @@ dnf makecache
 #mutlinode stuff
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.2.1-1.el8.x86_64.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.0-1.el8.x86_64.rpm
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
 autorun_mode: hunt
 include_self: true
-payload_file: /opt/flight/opt/gather/var/data.yml
+content_command: cat /opt/flight/opt/gather/var/data.yml
 auth_key: flight-solo
 EOF
 
@@ -111,8 +111,8 @@ EOF
 
 flight service enable hunter
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.1-1.el8.x86_64.rpm 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.5-1.noarch.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.2-1.el8.x86_64.rpm 
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.6-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 
 flight profile prepare openflight-slurm-multinode
