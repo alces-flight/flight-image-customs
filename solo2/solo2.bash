@@ -106,7 +106,7 @@ merge_how:
    settings: [no_replace, recurse_list]
 runcmd:
   - "IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`; echo \"target_host: ${IP}\" >> /opt/flight/opt/hunter/etc/config.yml"
-  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -f /opt/flight/opt/gather/var/data.yml; fi
+  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -c 'cat /opt/flight/opt/gather/var/data.yml'; fi
 EOF
 
 flight service enable hunter
