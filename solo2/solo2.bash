@@ -69,10 +69,6 @@ firewall-offline-cmd --add-port 5900-6000/tcp
 firewall-offline-cmd --add-service https
 firewall-offline-cmd --add-service http
 
-#Cleanup
-rm /etc/yum.repos.d/solo2.repo
-dnf makecache
-
 #mutlinode stuff
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
 
@@ -185,3 +181,7 @@ merge_how:
 runcmd:
  - date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf; chmod 0400 /opt/flight/etc/shared-secret.conf; /opt/flight/bin/flight service stack restart
 EOF
+
+#Cleanup
+rm /etc/yum.repos.d/solo2.repo
+dnf makecache
