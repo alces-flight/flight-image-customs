@@ -76,7 +76,7 @@ dnf makecache
 #mutlinode stuff
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.0-1.el8.x86_64.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.1-1.el8.x86_64.rpm
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
