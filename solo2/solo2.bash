@@ -1,7 +1,7 @@
 # Version tag
-VERSION=flightsolo-2023.1
+VERSION=2023.1
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
-BUILDVERSION="${VERSION}_${DATE}"
+BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
 
 #Repo
@@ -118,6 +118,11 @@ flight profile prepare openflight-kubernetes-multinode
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
 use_hunter: true
 EOF
+
+# Set release name & version in prompt
+sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
+sed -i 's/flight_STARTER_product=.*/flight_STARTER_product="Flight Solo"/g' /opt/flight/etc/flight-starter.*
+sed -i "s/flight_STARTER_release=.*/flight_STARTER_release='$VERSION'/g" /opt/flight/etc/flight-starter.*
 
 cat << 'EOF' > /usr/lib/systemd/system/flight-service.service
 # =============================================================================
