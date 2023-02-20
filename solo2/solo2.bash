@@ -1,3 +1,9 @@
+# Version tag
+VERSION=2023.1
+DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
+BUILDVERSION="flightsolo-${VERSION}_${DATE}"
+echo $BUILDVERSION > /etc/solo-release
+
 #Repo
 cat << "EOF" > /etc/yum.repos.d/solo2.repo
 [openflight]
@@ -24,7 +30,7 @@ dnf -y install flight-user-suite
 dnf -y install flight-web-suite
 dnf -y install python3-websockify xorg-x11-apps netpbm-progs
 
-dnf -y install alces-flight-landing-page-branding
+dnf -y install https://alces-flight.s3.eu-west-1.amazonaws.com/repos/alces-flight-dev/centos/8/x86_64/alces-flight-landing-page-branding-1.7.1-1.el8.x86_64.rpm
 
 dnf -y install flight-plugin-system-systemd-service
 
@@ -49,9 +55,6 @@ EOF
 #allow generation of root user ssh keys
 sed -i 's/flight_SSH_LOWEST_UID=.*/flight_SSH_LOWEST_UID=0/g;s/flight_SSH_SKIP_USERS=.*/flight_SSH_SKIP_USERS="none"/g' /opt/flight/etc/setup-sshkey.rc
 
-#prepare the openflight-slurm-standalone spin
-flight profile prepare openflight-slurm-standalone
-
 echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
 
 #cloudinit overrides
@@ -66,20 +69,17 @@ firewall-offline-cmd --add-port 5900-6000/tcp
 firewall-offline-cmd --add-service https
 firewall-offline-cmd --add-service http
 
-#Cleanup
-rm /etc/yum.repos.d/solo2.repo
-dnf makecache
-
 #mutlinode stuff
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.6-1.el8.x86_64.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.1.2-1.el8.x86_64.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.1-1.el8.x86_64.rpm
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
 autorun_mode: hunt
 include_self: true
-payload_file: /opt/flight/opt/gather/var/data.yml
+content_command: cat /opt/flight/opt/gather/var/data.yml
+auth_key: flight-solo
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
@@ -102,20 +102,27 @@ merge_how:
    settings: [no_replace, recurse_list]
 runcmd:
   - "IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`; echo \"target_host: ${IP}\" >> /opt/flight/opt/hunter/etc/config.yml"
-  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -f /opt/flight/opt/gather/var/data.yml; fi
+  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -c 'cat /opt/flight/opt/gather/var/data.yml'; fi
 EOF
 
 flight service enable hunter
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.1-1.el8.x86_64.rpm 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.3-1.noarch.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.2-1.el8.x86_64.rpm 
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.6-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 
+flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
+flight profile prepare openflight-kubernetes-multinode
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
 use_hunter: true
 EOF
+
+# Set release name & version in prompt
+sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
+sed -i 's/flight_STARTER_product=.*/flight_STARTER_product="Flight Solo"/g' /opt/flight/etc/flight-starter.*
+sed -i "s/flight_STARTER_release=.*/flight_STARTER_release='$VERSION'/g" /opt/flight/etc/flight-starter.*
 
 cat << 'EOF' > /usr/lib/systemd/system/flight-service.service
 # =============================================================================
@@ -169,14 +176,6 @@ EOF
 
 systemctl daemon-reload
 
-# Remove desktop access_host things which break connecting via web-suite
-sed -i '4,9d' /opt/flight/usr/lib/profile/types/openflight-slurm-multinode/run_env/openflight-slurm-multinode/roles/flightenv/tasks/main.yml
-
-# Set title page for flight web apps (still defaults to openflightHPC)
-echo "document:" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
-echo "  title: 'Flight Solo'" >> /opt/flight/opt/www/landing-page/branding/content/data/branding.yaml
-flight landing-page compile # just in case it needs to be recompiled here and isn't in the playbook as part of setup
-
 #remove key generated on rpm install and do it another way....
 rm -v /opt/flight/etc/shared-secret.conf
 cat << "EOF" > /etc/cloud/cloud.cfg.d/95_flightpatches.cfg
@@ -189,19 +188,6 @@ runcmd:
  - date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf; chmod 0400 /opt/flight/etc/shared-secret.conf; /opt/flight/bin/flight service stack restart
 EOF
 
-#patch to fix issue in gnome-terminal under flight desktops
-if ( grep -q '8.' /etc/redhat-release ); then
-  cat << EOF > /tmp/fp1.patch
---- /opt/flight/usr/lib/desktop/types/gnome/session.sh.org	2022-08-26 11:20:43.000000000 +0000
-+++ /opt/flight/usr/lib/desktop/types/gnome/session.sh	2022-12-01 17:53:00.399328587 +0000
-@@ -164,6 +164,7 @@
-   gnome_terminal_pid=$!
- fi
-
-+export LANG=en_US.UTF-8
- gnome-session ${_GNOME_PARAMS} &
- gnome_session_pid=$!  
-EOF
-patch -p0 /tmp/fp1.patch
-rm /tmp/fp1.patch
-fi
+#Cleanup
+rm /etc/yum.repos.d/solo2.repo
+dnf makecache
