@@ -83,6 +83,7 @@ auth_key: flight-solo
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
+firewall-offline-cmd --add-port 8888/udp 
 
 cat << "EOF" > /etc/cloud/cloud.cfg.d/99_flightgather.cfg
 merge_how:
