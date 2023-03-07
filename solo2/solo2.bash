@@ -161,9 +161,27 @@ cat << 'EOF' > /var/lib/firstrun/scripts/02_flighthunter.bash
 IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`
 echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
 
+BROADCAST_ADDRESS=`ip addr |grep ${IP} |awk '{print $4}'`
+
 if [ -f /opt/flight/cloudinit.in ]; then
     source /opt/flight/cloudinit.in
-    /opt/flight/bin/flight hunter send  --server "${SERVER}" -c 'cat /opt/flight/opt/gather/var/data.yml'
+
+    # Prepare Send Command
+    if [ -z ${SERVER} ] ; then
+        SEND_ARG="--server ${SERVER}"
+    else
+        SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
+    fi
+    if [ -z ${AUTH_KEY} ] ; then
+        AUTH_ARG="--auth $AUTH_KEY"
+        # Configure server to use key
+        sed -i "s/auth_key: flight-solo/auth_key: $AUTH_KEY/g" /opt/flight/opt/hunter/etc/config.yml
+        flight service restart hunter 
+    fi
+    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'
+else
+    # Broadcast by default
+    /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'
 fi
 EOF
 
