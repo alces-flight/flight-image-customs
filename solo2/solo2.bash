@@ -102,7 +102,7 @@ function fr {
   echo "-------------------------------------------------------------------------------"
   echo "Running Firstrun scripts.."
   if [ -f /var/lib/firstrun/RUN ]; then
-    for script in `find /var/lib/firstrun/scripts -type f -iname *.bash`; do
+    for script in `find /var/lib/firstrun/scripts -type f -iname *.bash |sort -h`; do
       echo "Running $script.." >> /root/firstrun.log 2>&1
       /bin/bash $script >> /root/firstrun.log 2>&1
     done
