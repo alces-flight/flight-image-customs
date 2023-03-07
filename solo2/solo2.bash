@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.1
+VERSION=2023.2
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -98,7 +98,7 @@ cat << 'EOF' > /var/lib/firstrun/bin/firstrun
 #!/bin/bash
 function fr {
   echo "-------------------------------------------------------------------------------"
-  echo "First Run - Copyright (c) 2023- Alces Flight Ltd"
+  echo "First Run - Copyright (c) 2023-present Alces Flight Ltd"
   echo "-------------------------------------------------------------------------------"
   echo "Running Firstrun scripts.."
   if [ -f /var/lib/firstrun/RUN ]; then
@@ -148,6 +148,10 @@ systemctl enable firstrun.service
 touch /var/lib/firstrun/RUN
 
 # Add firstrun scripts
+
+cat << 'EOF' > /var/lib/firstrun/scripts/00_flightprepare.bash
+/opt/flight/libexec/flight-starter/setup-sshkey
+EOF
 
 cat << 'EOF' > /var/lib/firstrun/scripts/01_flightgather.bash
 /opt/flight/bin/flight gather collect
