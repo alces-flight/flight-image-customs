@@ -85,25 +85,88 @@ EOF
 firewall-offline-cmd --add-port 8888/tcp 
 firewall-offline-cmd --add-port 8888/udp 
 
-cat << "EOF" > /etc/cloud/cloud.cfg.d/99_flightgather.cfg
-merge_how:
- - name: list
-   settings: [append]
- - name: dict
-   settings: [no_replace, recurse_list]
-runcmd:
-  - /opt/flight/bin/flight gather collect
+#
+# First Run
+#
+
+# Setup firstrun
+
+mkdir -p /var/lib/firstrun/{bin,scripts}
+mkdir -p /var/log/firstrun/
+
+cat << 'EOF' > /var/lib/firstrun/bin/firstrun
+#!/bin/bash
+function fr {
+  echo "-------------------------------------------------------------------------------"
+  echo "First Run - Copyright (c) 2023- Alces Flight Ltd"
+  echo "-------------------------------------------------------------------------------"
+  echo "Running Firstrun scripts.."
+  if [ -f /var/lib/firstrun/RUN ]; then
+    for script in `find /var/lib/firstrun/scripts -type f -iname *.bash`; do
+      echo "Running $script.." >> /root/firstrun.log 2>&1
+      /bin/bash $script >> /root/firstrun.log 2>&1
+    done
+    rm -f /var/lib/firstrun/RUN
+  fi
+  echo "Done!"
+  echo "-------------------------------------------------------------------------------"
+}
+trap fr EXIT
 EOF
 
-cat << "EOF" > /etc/cloud/cloud.cfg.d/96_flighthunt.cfg
-merge_how:
- - name: list
-   settings: [append]
- - name: dict
-   settings: [no_replace, recurse_list]
-runcmd:
-  - "IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`; echo \"target_host: ${IP}\" >> /opt/flight/opt/hunter/etc/config.yml"
-  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -c 'cat /opt/flight/opt/gather/var/data.yml'; fi
+cat << EOF > /var/lib/firstrun/bin/firstrun-stop
+#!/bin/bash
+/bin/systemctl disable firstrun.service
+if [ -f /firstrun.reboot ]; then
+  echo -n "Reboot flag set.. Rebooting.."
+  rm -f /firstrun.rebooot
+  shutdown -r now
+fi
+EOF
+
+cat << EOF >> /etc/systemd/system/firstrun.service
+[Unit]
+Description=FirstRun service
+After=network-online.target remote-fs.target
+Before=display-manager.service getty@tty1.service
+[Service]
+ExecStart=/bin/bash /var/lib/firstrun/bin/firstrun
+Type=oneshot
+ExecStartPost=/bin/bash /var/lib/firstrun/bin/firstrun-stop
+SysVStartPriority=99
+TimeoutSec=0
+RemainAfterExit=yes
+Environment=HOME=/root
+Environment=USER=root
+[Install]
+WantedBy=multi-user.target
+EOF
+
+chmod 664 /etc/systemd/system/firstrun.service
+systemctl daemon-reload
+systemctl enable firstrun.service
+touch /var/lib/firstrun/RUN
+
+# Add firstrun scripts
+
+cat << 'EOF' > /var/lib/firstrun/scripts/01_flightgather.bash
+/opt/flight/bin/flight gather collect
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/02_flighthunter.bash
+IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`
+echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
+
+if [ -f /opt/flight/cloudinit.in ]; then
+    source /opt/flight/cloudinit.in
+    /opt/flight/bin/flight hunter send  --server "${SERVER}" -c 'cat /opt/flight/opt/gather/var/data.yml'
+fi
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/99_flightpatches.bash
+date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
+chmod 0400 /opt/flight/etc/shared-secret.conf
+/opt/flight/bin/flight service stack restart
 EOF
 
 flight service enable hunter
@@ -177,17 +240,8 @@ EOF
 
 systemctl daemon-reload
 
-#remove key generated on rpm install and do it another way....
+#remove key generated on rpm install and allow firstrun 99_flightpatches.bash to do it another way
 rm -v /opt/flight/etc/shared-secret.conf
-cat << "EOF" > /etc/cloud/cloud.cfg.d/95_flightpatches.cfg
-merge_how:
- - name: list
-   settings: [append]
- - name: dict
-   settings: [no_replace, recurse_list]
-runcmd:
- - date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf; chmod 0400 /opt/flight/etc/shared-secret.conf; /opt/flight/bin/flight service stack restart
-EOF
 
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
