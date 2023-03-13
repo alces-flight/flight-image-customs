@@ -193,13 +193,14 @@ EOF
 
 flight service enable hunter
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.2-1.el8.x86_64.rpm 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.6-1.noarch.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.3-1.el8.x86_64.rpm 
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.7-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
 flight profile prepare openflight-kubernetes-multinode
+flight profile prepare openflight-jupyter-standalone
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
 use_hunter: true
