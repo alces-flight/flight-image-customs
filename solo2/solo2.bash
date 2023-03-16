@@ -167,20 +167,22 @@ if [ -f /opt/flight/cloudinit.in ]; then
     source /opt/flight/cloudinit.in
 
     # Prepare Send Command
-    if [ -z ${SERVER} ] ; then
+    if [ ! -z ${SERVER} ] ; then
         SEND_ARG="--server ${SERVER}"
     else
         SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
     fi
-    if [ -z ${AUTH_KEY} ] ; then
+    if [ ! -z ${AUTH_KEY} ] ; then
         AUTH_ARG="--auth $AUTH_KEY"
         # Configure server to use key
         sed -i "s/auth_key: flight-solo/auth_key: $AUTH_KEY/g" /opt/flight/opt/hunter/etc/config.yml
-        flight service restart hunter 
+        /opt/flight/bin/flight service restart hunter 
     fi
+    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'"
     /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'
 else
     # Broadcast by default
+    echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'"
     /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'
 fi
 EOF
