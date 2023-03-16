@@ -34,8 +34,6 @@ dnf -y install https://alces-flight.s3.eu-west-1.amazonaws.com/repos/alces-fligh
 
 dnf -y install flight-plugin-system-systemd-service
 
-dnf -y install flight-profile
-
 sleep 2
 
 
@@ -195,7 +193,7 @@ EOF
 
 flight service enable hunter
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.3-1.el8.x86_64.rpm 
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.3-3.el8.x86_64.rpm 
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.7-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-silo-0.0.0-2.el8.x86_64.rpm
