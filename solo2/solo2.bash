@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.1
+VERSION=2023.2
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -33,8 +33,6 @@ dnf -y install python3-websockify xorg-x11-apps netpbm-progs
 dnf -y install https://alces-flight.s3.eu-west-1.amazonaws.com/repos/alces-flight-dev/centos/8/x86_64/alces-flight-landing-page-branding-1.7.1-1.el8.x86_64.rpm
 
 dnf -y install flight-plugin-system-systemd-service
-
-dnf -y install flight-profile
 
 sleep 2
 
@@ -83,41 +81,133 @@ auth_key: flight-solo
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
+firewall-offline-cmd --add-port 8888/udp 
 
-cat << "EOF" > /etc/cloud/cloud.cfg.d/99_flightgather.cfg
-merge_how:
- - name: list
-   settings: [append]
- - name: dict
-   settings: [no_replace, recurse_list]
-runcmd:
-  - /opt/flight/bin/flight gather collect
+#
+# First Run
+#
+
+# Setup firstrun
+
+mkdir -p /var/lib/firstrun/{bin,scripts}
+mkdir -p /var/log/firstrun/
+
+cat << 'EOF' > /var/lib/firstrun/bin/firstrun
+#!/bin/bash
+function fr {
+  echo "-------------------------------------------------------------------------------"
+  echo "First Run - Copyright (c) 2023-present Alces Flight Ltd"
+  echo "-------------------------------------------------------------------------------"
+  echo "Running Firstrun scripts.."
+  if [ -f /var/lib/firstrun/RUN ]; then
+    for script in `find /var/lib/firstrun/scripts -type f -iname *.bash |sort -h`; do
+      echo "Running $script.." >> /root/firstrun.log 2>&1
+      /bin/bash $script >> /root/firstrun.log 2>&1
+    done
+    rm -f /var/lib/firstrun/RUN
+  fi
+  echo "Done!"
+  echo "-------------------------------------------------------------------------------"
+}
+trap fr EXIT
 EOF
 
-cat << "EOF" > /etc/cloud/cloud.cfg.d/96_flighthunt.cfg
-merge_how:
- - name: list
-   settings: [append]
- - name: dict
-   settings: [no_replace, recurse_list]
-runcmd:
-  - "IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`; echo \"target_host: ${IP}\" >> /opt/flight/opt/hunter/etc/config.yml"
-  - if [ -f /opt/flight/cloudinit.in ]; then source /opt/flight/cloudinit.in ; /opt/flight/bin/flight hunter send  --server "${SERVER}" -c 'cat /opt/flight/opt/gather/var/data.yml'; fi
+cat << EOF > /var/lib/firstrun/bin/firstrun-stop
+#!/bin/bash
+/bin/systemctl disable firstrun.service
+if [ -f /firstrun.reboot ]; then
+  echo -n "Reboot flag set.. Rebooting.."
+  rm -f /firstrun.rebooot
+  shutdown -r now
+fi
+EOF
+
+cat << EOF >> /etc/systemd/system/firstrun.service
+[Unit]
+Description=FirstRun service
+After=network-online.target remote-fs.target
+Before=display-manager.service getty@tty1.service
+[Service]
+ExecStart=/bin/bash /var/lib/firstrun/bin/firstrun
+Type=oneshot
+ExecStartPost=/bin/bash /var/lib/firstrun/bin/firstrun-stop
+SysVStartPriority=99
+TimeoutSec=0
+RemainAfterExit=yes
+Environment=HOME=/root
+Environment=USER=root
+[Install]
+WantedBy=multi-user.target
+EOF
+
+chmod 664 /etc/systemd/system/firstrun.service
+systemctl daemon-reload
+systemctl enable firstrun.service
+touch /var/lib/firstrun/RUN
+
+# Add firstrun scripts
+
+cat << 'EOF' > /var/lib/firstrun/scripts/00_flightprepare.bash
+/opt/flight/libexec/flight-starter/setup-sshkey
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/01_flightgather.bash
+/opt/flight/bin/flight gather collect
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/02_flighthunter.bash
+IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`
+echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
+
+BROADCAST_ADDRESS=`ip addr |grep ${IP} |awk '{print $4}'`
+
+if [ -f /opt/flight/cloudinit.in ]; then
+    source /opt/flight/cloudinit.in
+
+    # Prepare Send Command
+    if [ ! -z ${SERVER} ] ; then
+        SEND_ARG="--server ${SERVER}"
+    else
+        SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
+    fi
+    if [ ! -z ${AUTH_KEY} ] ; then
+        AUTH_ARG="--auth $AUTH_KEY"
+        # Configure server to use key
+        sed -i "s/auth_key: flight-solo/auth_key: $AUTH_KEY/g" /opt/flight/opt/hunter/etc/config.yml
+        /opt/flight/bin/flight service restart hunter 
+    fi
+    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'"
+    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'
+else
+    # Broadcast by default
+    echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'"
+    /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'
+fi
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/99_flightpatches.bash
+date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
+chmod 0400 /opt/flight/etc/shared-secret.conf
+/opt/flight/bin/flight service stack restart
 EOF
 
 flight service enable hunter
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.2-1.el8.x86_64.rpm 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.6-1.noarch.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.3-3.el8.x86_64.rpm 
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.7-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-silo-0.0.0-2.el8.x86_64.rpm
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
 flight profile prepare openflight-kubernetes-multinode
+flight profile prepare openflight-jupyter-standalone
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
 use_hunter: true
 EOF
+
+flight silo type prepare aws
 
 # Set release name & version in prompt
 sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
@@ -176,17 +266,8 @@ EOF
 
 systemctl daemon-reload
 
-#remove key generated on rpm install and do it another way....
+#remove key generated on rpm install and allow firstrun 99_flightpatches.bash to do it another way
 rm -v /opt/flight/etc/shared-secret.conf
-cat << "EOF" > /etc/cloud/cloud.cfg.d/95_flightpatches.cfg
-merge_how:
- - name: list
-   settings: [append]
- - name: dict
-   settings: [no_replace, recurse_list]
-runcmd:
- - date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf; chmod 0400 /opt/flight/etc/shared-secret.conf; /opt/flight/bin/flight service stack restart
-EOF
 
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
