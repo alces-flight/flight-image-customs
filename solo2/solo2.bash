@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.2
+VERSION=2023.3
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
