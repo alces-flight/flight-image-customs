@@ -186,15 +186,28 @@ if [ -f /opt/flight/cloudinit.in ]; then
         AUTH_ARG="--auth $AUTH_KEY"
         # Configure server to use key
         sed -i "s/auth_key: flight-solo/auth_key: $AUTH_KEY/g" /opt/flight/opt/hunter/etc/config.yml
-        /opt/flight/bin/flight service restart hunter 
+        RESTART_SERVICE=true
     fi
 
-    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'"
-    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'
+    # Prepare Auto Parse
+    if [ ! -z ${AUTOPARSEMATCH} ] ; then 
+        echo "auto_parse: $AUTOPARSEMATCH" >> /opt/flight/opt/hunter/etc/config.yml
+        RESTART_SERVICE=true
+    fi
+    
+    # Restart Service
+    if [[ $RESTART_SERVICE == "true" ]] ; then
+        echo "Restarting hunter to apply configuration changes" 
+        /opt/flight/bin/flight service restart hunter
+    fi 
+
+    # Send
+    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG"
+    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG
 else
     # Broadcast by default
-    echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'"
-    /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'
+    echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}"
+    /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}
 fi
 EOF
 
