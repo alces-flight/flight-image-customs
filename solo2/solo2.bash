@@ -161,6 +161,9 @@ echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
 
 BROADCAST_ADDRESS=`ip addr |grep ${IP} |awk '{print $4}'`
 
+/opt/flight/bin/flight service enable hunter 
+/opt/flight/bin/flight service restart hunter 
+
 if [ -f /opt/flight/cloudinit.in ]; then
     source /opt/flight/cloudinit.in
 
@@ -200,8 +203,6 @@ date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
 chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
 EOF
-
-flight service enable hunter
 
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.3-3.el8.x86_64.rpm 
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.7-1.noarch.rpm
