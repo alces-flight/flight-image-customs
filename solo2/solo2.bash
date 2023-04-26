@@ -256,7 +256,7 @@ chmod 0400 /opt/flight/etc/shared-secret.conf
 EOF
 
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.2.0~rc3-1.el8.x86_64.rpm \
-               https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.2.0~rc1-1.noarch.rpm
+               https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.2.0~rc2-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-silo-0.0.0-2.el8.x86_64.rpm
 
