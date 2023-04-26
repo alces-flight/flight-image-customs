@@ -211,6 +211,44 @@ else
 fi
 EOF
 
+cat << 'EOF' > /var/lib/firstrun/scripts/03_pubkeyshare.bash
+if [ -f /opt/flight/cloudinit.in ] ; then
+    source /opt/flight/cloudinit.in
+    if [ ${SHAREPUBKEY} == "true" ] ; then
+        firewall-cmd --add-port 1234/tcp --zone public
+        firewall-cmd --add-port 1234/tcp --zone public --permanent
+        cat << 'EOD' > /usr/lib/systemd/system/flight-sharepubkey.service
+[Unit]
+Description=Share Public SSH Key On Port 1234
+
+[Service]
+ExecStart=/usr/bin/socat -U TCP4-LISTEN:1234,reuseaddr,fork FILE:"/root/.ssh/id_alcescluster.pub",rdonly
+
+[Install]
+WantedBy=multi-user.target
+EOD
+        systemctl enable flight-sharepubkey --now
+    fi
+fi
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/04_getpubkey.bash
+if [ -f /opt/flight/cloudinit.in ] ; then
+    source /opt/flight/cloudinit.in
+    if [ ! -z ${SERVER} ] ; then
+        count=10
+        until socat -u TCP:$SERVER:1234 STDOUT >> /root/.ssh/authorized_keys ; do
+            sleep 1
+            count=$((count - 1))
+            if [[ $count == 0 ]] ; then
+                echo "Failed to receive SSH Public Key from $SERVER"
+                break
+            fi
+        done
+    fi
+fi
+EOF
+
 cat << 'EOF' > /var/lib/firstrun/scripts/99_flightpatches.bash
 date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
 chmod 0400 /opt/flight/etc/shared-secret.conf
