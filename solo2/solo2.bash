@@ -162,7 +162,6 @@ echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
 BROADCAST_ADDRESS=`ip addr |grep ${IP} |awk '{print $4}'`
 
 /opt/flight/bin/flight service enable hunter 
-/opt/flight/bin/flight service restart hunter 
 
 if [ -f /opt/flight/cloudinit.in ]; then
     source /opt/flight/cloudinit.in
@@ -186,20 +185,15 @@ if [ -f /opt/flight/cloudinit.in ]; then
         AUTH_ARG="--auth $AUTH_KEY"
         # Configure server to use key
         sed -i "s/auth_key: flight-solo/auth_key: $AUTH_KEY/g" /opt/flight/opt/hunter/etc/config.yml
-        RESTART_SERVICE=true
     fi
 
     # Prepare Auto Parse
     if [ ! -z ${AUTOPARSEMATCH} ] ; then 
         echo "auto_parse: $AUTOPARSEMATCH" >> /opt/flight/opt/hunter/etc/config.yml
-        RESTART_SERVICE=true
     fi
     
     # Restart Service
-    if [[ $RESTART_SERVICE == "true" ]] ; then
-        echo "Restarting hunter to apply configuration changes" 
-        /opt/flight/bin/flight service restart hunter
-    fi 
+    /opt/flight/bin/flight service restart hunter
 
     # Send
     echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG"
