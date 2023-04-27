@@ -208,7 +208,7 @@ EOF
 cat << 'EOF' > /var/lib/firstrun/scripts/03_pubkeyshare.bash
 if [ -f /opt/flight/cloudinit.in ] ; then
     source /opt/flight/cloudinit.in
-    if [ ${SHAREPUBKEY} == "true" ] ; then
+    if [[ ${SHAREPUBKEY} == "true" ]] ; then
         firewall-cmd --add-port 1234/tcp --zone public
         firewall-cmd --add-port 1234/tcp --zone public --permanent
         cat << 'EOD' > /usr/lib/systemd/system/flight-sharepubkey.service
