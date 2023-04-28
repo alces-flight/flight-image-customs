@@ -188,7 +188,7 @@ if [ -f /opt/flight/cloudinit.in ]; then
     fi
 
     # Prepare Auto Parse
-    if [ ! -z ${AUTOPARSEMATCH} ] ; then 
+    if [ ! -z "${AUTOPARSEMATCH}" ] ; then 
         echo "auto_parse: $AUTOPARSEMATCH" >> /opt/flight/opt/hunter/etc/config.yml
     fi
     
