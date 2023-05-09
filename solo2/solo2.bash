@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.2
+VERSION=2023.3
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -30,7 +30,7 @@ dnf -y install flight-user-suite
 dnf -y install flight-web-suite
 dnf -y install python3-websockify xorg-x11-apps netpbm-progs
 
-dnf -y install https://alces-flight.s3.eu-west-1.amazonaws.com/repos/alces-flight-dev/centos/8/x86_64/alces-flight-landing-page-branding-1.7.1-1.el8.x86_64.rpm
+dnf -y install alces-flight-landing-page-branding
 
 dnf -y install flight-plugin-system-systemd-service
 
@@ -70,7 +70,7 @@ firewall-offline-cmd --add-service http
 #mutlinode stuff
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.1-1.el8.x86_64.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.2~rc3-1.el8.x86_64.rpm
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
@@ -161,6 +161,8 @@ echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
 
 BROADCAST_ADDRESS=`ip addr |grep ${IP} |awk '{print $4}'`
 
+/opt/flight/bin/flight service enable hunter 
+
 if [ -f /opt/flight/cloudinit.in ]; then
     source /opt/flight/cloudinit.in
 
@@ -170,18 +172,74 @@ if [ -f /opt/flight/cloudinit.in ]; then
     else
         SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
     fi
+    
+    # Prepare Identity
+    if [ ! -z ${LABEL} ] ; then
+        IDENTITY_ARG="--label ${LABEL}"
+    elif [ ! -z ${PREFIX} ] ; then
+        IDENTITY_ARG="--prefix ${PREFIX}"
+    fi
+
+    # Prepare Auth Key
     if [ ! -z ${AUTH_KEY} ] ; then
         AUTH_ARG="--auth $AUTH_KEY"
         # Configure server to use key
         sed -i "s/auth_key: flight-solo/auth_key: $AUTH_KEY/g" /opt/flight/opt/hunter/etc/config.yml
-        /opt/flight/bin/flight service restart hunter 
     fi
-    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'"
-    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG -c 'cat /opt/flight/opt/gather/var/data.yml'
+
+    # Prepare Auto Parse
+    if [ ! -z "${AUTOPARSEMATCH}" ] ; then 
+        echo "auto_parse: $AUTOPARSEMATCH" >> /opt/flight/opt/hunter/etc/config.yml
+    fi
+    
+    # Restart Service
+    /opt/flight/bin/flight service restart hunter
+
+    # Send
+    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG"
+    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG
 else
     # Broadcast by default
-    echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'"
-    /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS} -c 'cat /opt/flight/opt/gather/var/data.yml'
+    echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}"
+    /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}
+fi
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/03_pubkeyshare.bash
+if [ -f /opt/flight/cloudinit.in ] ; then
+    source /opt/flight/cloudinit.in
+    if [[ ${SHAREPUBKEY} == "true" ]] ; then
+        firewall-cmd --add-port 1234/tcp --zone public
+        firewall-cmd --add-port 1234/tcp --zone public --permanent
+        cat << 'EOD' > /usr/lib/systemd/system/flight-sharepubkey.service
+[Unit]
+Description=Share Public SSH Key On Port 1234
+
+[Service]
+ExecStart=/usr/bin/socat -U TCP4-LISTEN:1234,reuseaddr,fork FILE:"/root/.ssh/id_alcescluster.pub",rdonly
+
+[Install]
+WantedBy=multi-user.target
+EOD
+        systemctl enable flight-sharepubkey --now
+    fi
+fi
+EOF
+
+cat << 'EOF' > /var/lib/firstrun/scripts/04_getpubkey.bash
+if [ -f /opt/flight/cloudinit.in ] ; then
+    source /opt/flight/cloudinit.in
+    if [ ! -z ${SERVER} ] ; then
+        count=10
+        until socat -u TCP:$SERVER:1234 STDOUT >> /root/.ssh/authorized_keys ; do
+            sleep 1
+            count=$((count - 1))
+            if [[ $count == 0 ]] ; then
+                echo "Failed to receive SSH Public Key from $SERVER"
+                break
+            fi
+        done
+    fi
 fi
 EOF
 
@@ -191,10 +249,8 @@ chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
 EOF
 
-flight service enable hunter
-
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.1.3-3.el8.x86_64.rpm 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.1.7-1.noarch.rpm
+dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.2.0~rc3-1.el8.x86_64.rpm \
+               https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.2.0~rc2-1.noarch.rpm
 dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
 dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-silo-0.0.0-2.el8.x86_64.rpm
 
