@@ -158,6 +158,16 @@ cat << 'EOF' > /var/lib/firstrun/scripts/01_flightgather.bash
 /opt/flight/bin/flight gather collect
 EOF
 
+cat << 'EOF' > /var/lib/firstrun/scripts/01_flightprofile.bash
+if [ -f /opt/flight/cloudinit.in ] ; then
+    source /opt/flight/cloudinit.in
+
+    if [ ! -z ${PROFILE_ANSWERS} ; then 
+        /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS"
+    fi
+fi
+EOF
+
 cat << 'EOF' > /var/lib/firstrun/scripts/02_flighthunter.bash
 IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`
 echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
