@@ -217,6 +217,18 @@ if [ -f /opt/flight/cloudinit.in ]; then
         IFS="$oIFS"
     fi
     
+    # Set Prefixes
+    if [ ! -z ${PREFIX_STARTS}" ; then
+        echo "prefix_starts:" >> /opt/flight/opt/hunter/etc/config.yml
+        oIFS="$IFS"
+        IFS=','
+        for line in $PREFIX_STARTS ; do
+            line=$(echo $line |sed 's/^ *//g')
+            echo "  $line" >> /opt/flight/opt/hunter/etc/config.yml
+        done
+        IFS="$oIFS"
+    fi
+
     # Restart Service
     /opt/flight/bin/flight service restart hunter
 
