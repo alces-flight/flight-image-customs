@@ -204,6 +204,18 @@ if [ -f /opt/flight/cloudinit.in ]; then
     if [ ! -z "${AUTOPARSEMATCH}" ] ; then 
         echo "auto_parse: $AUTOPARSEMATCH" >> /opt/flight/opt/hunter/etc/config.yml
     fi
+
+    # Prepare Auto Apply
+    if [ ! -z ${AUTOAPPLY}" ; then
+        echo "auto_apply:" >> /opt/flight/opt/hunter/etc/config.yml
+        oIFS="$IFS"
+        IFS=','
+        for line in $AUTOAPPLY ; do
+            line=$(echo $line |sed 's/^ *//g')
+            echo "  $line" >> /opt/flight/opt/hunter/etc/config.yml
+        done
+        IFS="$oIFS"
+    fi
     
     # Restart Service
     /opt/flight/bin/flight service restart hunter
