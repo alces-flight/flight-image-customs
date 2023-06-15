@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.3
+VERSION=2023.4
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -78,6 +78,9 @@ autorun_mode: hunt
 include_self: true
 content_command: cat /opt/flight/opt/gather/var/data.yml
 auth_key: flight-solo
+short_hostname: true
+default_start: '01'
+skip_used_index: true
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
