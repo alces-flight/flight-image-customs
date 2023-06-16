@@ -189,8 +189,12 @@ if [ -f /opt/flight/cloudinit.in ]; then
     # Prepare Identity
     if [ ! -z ${LABEL} ] ; then
         IDENTITY_ARG="--label ${LABEL}"
+        echo "presets:" >> /opt/flight/opt/hunter/etc/config.yml
+        echo "  label: ${LABEL}" >> /opt/flight/opt/hunter/etc/config.yml
     elif [ ! -z ${PREFIX} ] ; then
         IDENTITY_ARG="--prefix ${PREFIX}"
+        echo "presets:" >> /opt/flight/opt/hunter/etc/config.yml
+        echo "  prefix: ${PREFIX}" >> /opt/flight/opt/hunter/etc/config.yml
     fi
 
     # Prepare Auth Key
