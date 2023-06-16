@@ -163,7 +163,7 @@ if [ -f /opt/flight/cloudinit.in ] ; then
     source /opt/flight/cloudinit.in
 
     if [ ! -z ${PROFILE_ANSWERS} ; then 
-        /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS"
+        /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS" --accept-defaults
     fi
 fi
 EOF
