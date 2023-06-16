@@ -305,6 +305,7 @@ use_hunter: true
 EOF
 
 flight silo type prepare aws
+echo "software_dir: ~/apps" >> /opt/flight/opt/silo/etc/config.yml
 
 # Set release name & version in prompt
 sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
