@@ -19,7 +19,14 @@ enabled=1
 gpgcheck=0
 EOF
 
-dnf config-manager --set-enabled powertools
+CENTOS_VER=$(rpm --eval '%{centos_ver}')
+
+if [[ $CENTOS_VER == 9 ]] ; then
+    dnf config-manager --set-enabled crb
+else
+    dnf config-manager --set-enabled powertools
+fi 
+
 dnf -y install epel-release
 
 dnf makecache
