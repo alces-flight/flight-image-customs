@@ -68,9 +68,7 @@ firewall-offline-cmd --add-service https
 firewall-offline-cmd --add-service http
 
 #mutlinode stuff
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
-
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.2~rc3-1.el8.x86_64.rpm
+dnf -y install flight-gather flight-hunter
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
@@ -162,7 +160,7 @@ cat << 'EOF' > /var/lib/firstrun/scripts/01_flightprofile.bash
 if [ -f /opt/flight/cloudinit.in ] ; then
     source /opt/flight/cloudinit.in
 
-    if [ ! -z ${PROFILE_ANSWERS} ; then 
+    if [ ! -z "${PROFILE_ANSWERS}" ] ; then 
         /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS" --accept-defaults
     fi
 fi
@@ -210,7 +208,7 @@ if [ -f /opt/flight/cloudinit.in ]; then
     fi
 
     # Prepare Auto Apply
-    if [ ! -z ${AUTOAPPLY}" ; then
+    if [ ! -z "${AUTOAPPLY}" ] ; then
         echo "auto_apply:" >> /opt/flight/opt/hunter/etc/config.yml
         oIFS="$IFS"
         IFS=','
@@ -222,7 +220,7 @@ if [ -f /opt/flight/cloudinit.in ]; then
     fi
     
     # Set Prefixes
-    if [ ! -z ${PREFIX_STARTS}" ; then
+    if [ ! -z "${PREFIX_STARTS}" ] ; then
         echo "prefix_starts:" >> /opt/flight/opt/hunter/etc/config.yml
         oIFS="$IFS"
         IFS=','
@@ -290,10 +288,9 @@ chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
 EOF
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.2.0~rc3-1.el8.x86_64.rpm \
-               https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.2.0~rc2-1.noarch.rpm
-dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-silo-0.0.0-2.el8.x86_64.rpm
+dnf -y install flight-profile flight-profile-types
+dnf -y install flight-pdsh
+dnf -y install flight-silo
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
