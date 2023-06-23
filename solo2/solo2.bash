@@ -52,6 +52,9 @@ flight set --global always on
 flight start
 flight desktop prepare gnome 
 
+systemctl set-default multi-user.target
+systemctl isolate multi-user.target
+
 #increase timeout on websuite pkg checks
 cat << EOF >> /opt/flight/etc/desktop-restapi.local.yaml
 command_timeout: 180
