@@ -23,8 +23,10 @@ CENTOS_VER=$(rpm --eval '%{centos_ver}')
 
 if [[ $CENTOS_VER == 9 ]] ; then
     dnf config-manager --set-enabled crb
+    EXTRA_DNF_PACKAGES=""
 else
     dnf config-manager --set-enabled powertools
+    EXTRA_DNF_PACKAGES="xorg-x11-apps"
 fi 
 
 dnf -y install epel-release
@@ -35,7 +37,7 @@ dnf makecache
 
 dnf -y install flight-user-suite
 dnf -y install flight-web-suite
-dnf -y install python3-websockify xorg-x11-apps netpbm-progs
+dnf -y install python3-websockify netpbm-progs $EXTRA_DNF_PACKAGES
 
 dnf -y install alces-flight-landing-page-branding
 
