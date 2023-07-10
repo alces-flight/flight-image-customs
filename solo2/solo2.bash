@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.3
+VERSION=2023.4
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -19,7 +19,16 @@ enabled=1
 gpgcheck=0
 EOF
 
-dnf config-manager --set-enabled powertools
+CENTOS_VER=$(rpm --eval '%{centos_ver}')
+
+if [[ $CENTOS_VER == 9 ]] ; then
+    dnf config-manager --set-enabled crb
+    EXTRA_DNF_PACKAGES=""
+else
+    dnf config-manager --set-enabled powertools
+    EXTRA_DNF_PACKAGES="xorg-x11-apps"
+fi 
+
 dnf -y install epel-release
 
 dnf makecache
@@ -28,7 +37,7 @@ dnf makecache
 
 dnf -y install flight-user-suite
 dnf -y install flight-web-suite
-dnf -y install python3-websockify xorg-x11-apps netpbm-progs
+dnf -y install python3-websockify netpbm-progs $EXTRA_DNF_PACKAGES
 
 dnf -y install alces-flight-landing-page-branding
 
@@ -44,6 +53,9 @@ systemctl enable flight-service
 flight set --global always on
 flight start
 flight desktop prepare gnome 
+
+systemctl set-default multi-user.target
+systemctl isolate multi-user.target
 
 #increase timeout on websuite pkg checks
 cat << EOF >> /opt/flight/etc/desktop-restapi.local.yaml
@@ -68,9 +80,7 @@ firewall-offline-cmd --add-service https
 firewall-offline-cmd --add-service http
 
 #mutlinode stuff
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-gather-0.0.8-1.el8.x86_64.rpm
-
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-hunter-0.3.2~rc3-1.el8.x86_64.rpm
+dnf -y install flight-gather flight-hunter
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
@@ -78,6 +88,9 @@ autorun_mode: hunt
 include_self: true
 content_command: cat /opt/flight/opt/gather/var/data.yml
 auth_key: flight-solo
+short_hostname: true
+default_start: '01'
+skip_used_index: true
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
@@ -155,6 +168,16 @@ cat << 'EOF' > /var/lib/firstrun/scripts/01_flightgather.bash
 /opt/flight/bin/flight gather collect
 EOF
 
+cat << 'EOF' > /var/lib/firstrun/scripts/01_flightprofile.bash
+if [ -f /opt/flight/cloudinit.in ] ; then
+    source /opt/flight/cloudinit.in
+
+    if [ ! -z "${PROFILE_ANSWERS}" ] ; then 
+        /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS" --accept-defaults
+    fi
+fi
+EOF
+
 cat << 'EOF' > /var/lib/firstrun/scripts/02_flighthunter.bash
 IP=`ip route get 1.1.1.1 | awk '{ print $7 }'`
 echo "target_host: ${IP}" >> /opt/flight/opt/hunter/etc/config.yml
@@ -176,8 +199,12 @@ if [ -f /opt/flight/cloudinit.in ]; then
     # Prepare Identity
     if [ ! -z ${LABEL} ] ; then
         IDENTITY_ARG="--label ${LABEL}"
+        echo "presets:" >> /opt/flight/opt/hunter/etc/config.yml
+        echo "  label: ${LABEL}" >> /opt/flight/opt/hunter/etc/config.yml
     elif [ ! -z ${PREFIX} ] ; then
         IDENTITY_ARG="--prefix ${PREFIX}"
+        echo "presets:" >> /opt/flight/opt/hunter/etc/config.yml
+        echo "  prefix: ${PREFIX}" >> /opt/flight/opt/hunter/etc/config.yml
     fi
 
     # Prepare Auth Key
@@ -191,7 +218,31 @@ if [ -f /opt/flight/cloudinit.in ]; then
     if [ ! -z "${AUTOPARSEMATCH}" ] ; then 
         echo "auto_parse: $AUTOPARSEMATCH" >> /opt/flight/opt/hunter/etc/config.yml
     fi
+
+    # Prepare Auto Apply
+    if [ ! -z "${AUTOAPPLY}" ] ; then
+        echo "auto_apply:" >> /opt/flight/opt/hunter/etc/config.yml
+        oIFS="$IFS"
+        IFS=','
+        for line in $AUTOAPPLY ; do
+            line=$(echo $line |sed 's/^ *//g')
+            echo "  $line" >> /opt/flight/opt/hunter/etc/config.yml
+        done
+        IFS="$oIFS"
+    fi
     
+    # Set Prefixes
+    if [ ! -z "${PREFIX_STARTS}" ] ; then
+        echo "prefix_starts:" >> /opt/flight/opt/hunter/etc/config.yml
+        oIFS="$IFS"
+        IFS=','
+        for line in $PREFIX_STARTS ; do
+            line=$(echo $line |sed 's/^ *//g')
+            echo "  $line" >> /opt/flight/opt/hunter/etc/config.yml
+        done
+        IFS="$oIFS"
+    fi
+
     # Restart Service
     /opt/flight/bin/flight service restart hunter
 
@@ -249,10 +300,9 @@ chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
 EOF
 
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-0.2.0~rc3-1.el8.x86_64.rpm \
-               https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-profile-types-0.2.0~rc2-1.noarch.rpm
-dnf -y install https://repo.openflighthpc.org/openflight/centos/8/x86_64/flight-pdsh-2.34-5.el8.x86_64.rpm
-dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/8/x86_64/flight-silo-0.0.0-2.el8.x86_64.rpm
+dnf -y install flight-profile flight-profile-types
+dnf -y install flight-pdsh
+dnf -y install flight-silo
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
@@ -264,6 +314,7 @@ use_hunter: true
 EOF
 
 flight silo type prepare aws
+echo "software_dir: ~/apps" >> /opt/flight/opt/silo/etc/config.yml
 
 # Set release name & version in prompt
 sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
