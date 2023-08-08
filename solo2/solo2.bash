@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.4
+VERSION=2023.5
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -314,6 +314,7 @@ use_hunter: true
 EOF
 
 flight silo type prepare aws
+flight silo type prepare openstack
 echo "software_dir: ~/apps" >> /opt/flight/opt/silo/etc/config.yml
 
 # Set release name & version in prompt
