@@ -302,7 +302,6 @@ EOF
 
 dnf -y install flight-profile flight-profile-types
 dnf -y install flight-pdsh
-dnf -y install flight-silo
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
