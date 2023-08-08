@@ -192,10 +192,12 @@ if [ -f /opt/flight/cloudinit.in ]; then
     # Prepare Send Command
     if [ ! -z ${SERVER} ] ; then
         SEND_ARG="--server ${SERVER}"
+        # Set service to send mode to retry sending to SERVER until successful
+        sed -i 's/autorun_mode: hunt/autorun_mode: send/g' /opt/flight/opt/hunter/etc/config.yml
     else
         SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
     fi
-    
+
     # Prepare Identity
     if [ ! -z ${LABEL} ] ; then
         IDENTITY_ARG="--label ${LABEL}"
@@ -300,7 +302,7 @@ chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
 EOF
 
-dnf -y install flight-profile flight-profile-types
+dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
 
 flight profile prepare openflight-slurm-standalone
