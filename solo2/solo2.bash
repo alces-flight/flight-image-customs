@@ -91,6 +91,7 @@ auth_key: flight-solo
 short_hostname: true
 default_start: '01'
 skip_used_index: true
+retry_interval: '15'
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
