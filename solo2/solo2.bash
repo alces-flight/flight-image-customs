@@ -195,6 +195,7 @@ if [ -f /opt/flight/cloudinit.in ]; then
         SEND_ARG="--server ${SERVER}"
         # Set service to send mode to retry sending to SERVER until successful
         sed -i 's/autorun_mode: hunt/autorun_mode: send/g' /opt/flight/opt/hunter/etc/config.yml
+        sed -i "s/target_host: .*/target_host: ${SERVER}/g" /opt/flight/opt/hunter/etc/config.yml
     else
         SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
     fi
