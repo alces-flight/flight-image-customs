@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.4
+VERSION=2023.5
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -91,6 +91,7 @@ auth_key: flight-solo
 short_hostname: true
 default_start: '01'
 skip_used_index: true
+retry_interval: '15'
 EOF
 
 firewall-offline-cmd --add-port 8888/tcp 
@@ -192,10 +193,13 @@ if [ -f /opt/flight/cloudinit.in ]; then
     # Prepare Send Command
     if [ ! -z ${SERVER} ] ; then
         SEND_ARG="--server ${SERVER}"
+        # Set service to send mode to retry sending to SERVER until successful
+        sed -i 's/autorun_mode: hunt/autorun_mode: send/g' /opt/flight/opt/hunter/etc/config.yml
+        sed -i "s/target_host: .*/target_host: ${SERVER}/g" /opt/flight/opt/hunter/etc/config.yml
     else
         SEND_ARG="--broadcast --broadcast-address ${BROADCAST_ADDRESS}" 
     fi
-    
+
     # Prepare Identity
     if [ ! -z ${LABEL} ] ; then
         IDENTITY_ARG="--label ${LABEL}"
@@ -300,9 +304,8 @@ chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
 EOF
 
-dnf -y install flight-profile flight-profile-types
+dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
-dnf -y install flight-silo
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
@@ -314,6 +317,7 @@ use_hunter: true
 EOF
 
 flight silo type prepare aws
+flight silo type prepare openstack
 echo "software_dir: ~/apps" >> /opt/flight/opt/silo/etc/config.yml
 
 # Set release name & version in prompt
