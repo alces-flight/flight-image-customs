@@ -88,7 +88,7 @@ autorun_mode: hunt
 include_self: true
 content_command: cat /opt/flight/opt/gather/var/data.yml
 auth_key: flight-solo
-short_hostname: true
+default_label: short
 default_start: '01'
 skip_used_index: true
 retry_interval: '15'
