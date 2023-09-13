@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.5
+VERSION=2023.6
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -249,10 +249,6 @@ if [ -f /opt/flight/cloudinit.in ]; then
 
     # Restart Service
     /opt/flight/bin/flight service restart hunter
-
-    # Send
-    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG"
-    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG
 else
     # Broadcast by default
     echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}"
