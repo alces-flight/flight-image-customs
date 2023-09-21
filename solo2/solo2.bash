@@ -294,7 +294,7 @@ if [ -f /opt/flight/cloudinit.in ] ; then
 fi
 EOF
 
-cat << 'EOF' > /var/lib/firstrun/scripts/99_flightpatches.bash
+cat << 'EOF' > /var/lib/firstrun/scripts/00_flightpatches.bash
 date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
 chmod 0400 /opt/flight/etc/shared-secret.conf
 /opt/flight/bin/flight service stack restart
