@@ -281,7 +281,7 @@ cat << 'EOF' > /var/lib/firstrun/scripts/04_getpubkey.bash
 if [ -f /opt/flight/cloudinit.in ] ; then
     source /opt/flight/cloudinit.in
     if [ ! -z ${SERVER} ] ; then
-        count=10
+        count=120
         until socat -u TCP:$SERVER:1234 STDOUT >> /root/.ssh/authorized_keys ; do
             sleep 1
             count=$((count - 1))
