@@ -309,12 +309,9 @@ date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
 chmod 0400 /opt/flight/etc/shared-secret.conf
 
 # Generate new Console API key
-rm -f /opt/flight/etc/console-api/flight_console_api_key*
 ssh-keygen -b 521 -t ecdsa -f "/opt/flight/etc/console-api/flight_console_api_key" -q -N "" -C "Flight Console API Key"
 
 # Generate new Desktop API key
-rm -f /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/flight_desktop_api_key* 
-
 ssh-keygen -b 4096 -t rsa -f "/opt/flight/etc/desktop-restapi/id_rsa" -q -N "" -C "Flight Desktop RestAPI Key"
 ssh-keygen -b 521 -t ed25519 -f "/opt/flight/etc/desktop-restapi/flight_desktop_api_key" -q -N "" -C "Flight Desktop API Key"
 
@@ -399,8 +396,10 @@ EOF
 
 systemctl daemon-reload
 
-#remove key generated on rpm install and allow firstrun 99_flightpatches.bash to do it another way
+#remove keys generated on rpm install and allow firstrun 00_flightpatches.bash to do it another way
 rm -v /opt/flight/etc/shared-secret.conf
+rm -v /opt/flight/etc/console-api/flight_console_api_key*
+rm -v /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/flight_desktop_api_key* 
 
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
