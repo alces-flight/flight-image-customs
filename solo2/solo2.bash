@@ -73,7 +73,7 @@ echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/fli
 
 #desktop-restapi key for EL9
 if [[ $CENTOS_VER == 9 ]] ; then
-    sed -i 's,^# ssh_private_key_path: .*,ssh_private_key_path: "etc/desktop-restapi/flight_desktop_api_key",g;s,^# ssh_public_key_path: .*,ssh_public_key_path: "etc/desktop-restapi/flight_desktop_api_key.pub",g'
+    sed -i 's,^# ssh_private_key_path: .*,ssh_private_key_path: "etc/desktop-restapi/flight_desktop_api_key",g;s,^# ssh_public_key_path: .*,ssh_public_key_path: "etc/desktop-restapi/flight_desktop_api_key.pub",g' /opt/flight/etc/desktop-restapi.yaml
 fi
 
 #cloudinit overrides
