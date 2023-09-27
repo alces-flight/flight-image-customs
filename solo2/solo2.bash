@@ -403,8 +403,8 @@ EOF
 systemctl daemon-reload
 
 #remove keys generated on rpm install and allow firstrun 00_flightpatches.bash to do it another way
-rm -v /opt/flight/etc/shared-secret.conf
-rm -v /opt/flight/etc/console-api/flight_console_api_key*
+rm -fv /opt/flight/etc/shared-secret.conf
+rm -fv /opt/flight/etc/console-api/flight_console_api_key*
 rm -fv /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/flight_desktop_api_key* 
 
 #Cleanup
