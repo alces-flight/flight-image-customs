@@ -185,6 +185,12 @@ if [ -f /opt/flight/cloudinit.in ] ; then
     if [ ! -z "${PROFILE_ANSWERS}" ] ; then 
         /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS" --accept-defaults
     fi
+
+    # Prepare Auto Remove
+    if [ ! -z "${AUTOREMOVE}" ] ; then
+        echo "remove_on_shutdown: true" >> /opt/flight/opt/profile/etc/config.yml
+        echo "remove_hunter_entry: true" >> /opt/flight/opt/profile/etc/config.yml
+    fi
 fi
 EOF
 
@@ -243,7 +249,7 @@ if [ -f /opt/flight/cloudinit.in ]; then
         done
         IFS="$oIFS"
     fi
-    
+
     # Set Prefixes
     if [ ! -z "${PREFIX_STARTS}" ] ; then
         echo "prefix_starts:" >> /opt/flight/opt/hunter/etc/config.yml
