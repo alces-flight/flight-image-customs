@@ -36,6 +36,10 @@ dnf makecache
 #Installs
 
 dnf -y install flight-user-suite
+if [[ $CENTOS_VER == 9 ]] ; then
+    dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/9/x86_64/flight-desktop-1.11.5-1.el9.x86_64.rpm
+    dnf -y install ImageMagick
+fi
 dnf -y install flight-web-suite
 dnf -y install python3-websockify netpbm-progs $EXTRA_DNF_PACKAGES
 
