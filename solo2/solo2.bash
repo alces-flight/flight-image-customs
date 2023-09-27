@@ -23,7 +23,7 @@ CENTOS_VER=$(rpm --eval '%{centos_ver}')
 
 if [[ $CENTOS_VER == 9 ]] ; then
     dnf config-manager --set-enabled crb
-    EXTRA_DNF_PACKAGES=""
+    EXTRA_DNF_PACKAGES="lsof"
 else
     dnf config-manager --set-enabled powertools
     EXTRA_DNF_PACKAGES="xorg-x11-apps"
