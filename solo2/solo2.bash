@@ -71,6 +71,11 @@ sed -i 's/flight_SSH_LOWEST_UID=.*/flight_SSH_LOWEST_UID=0/g;s/flight_SSH_SKIP_U
 
 echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
 
+#desktop-restapi key for EL9
+if [[ $CENTOS_VER == 9 ]] ; then
+    sed -i 's,^# ssh_private_key_path: .*,ssh_private_key_path: "etc/desktop-restapi/flight_desktop_api_key",g;s,^# ssh_public_key_path: .*,ssh_public_key_path: "etc/desktop-restapi/flight_desktop_api_key.pub",g'
+fi
+
 #cloudinit overrides
 cat << "EOF" > /etc/cloud/cloud.cfg.d/50_solo2.cfg
 system_info:
@@ -299,8 +304,21 @@ fi
 EOF
 
 cat << 'EOF' > /var/lib/firstrun/scripts/00_flightpatches.bash
+# Generate new shared secret
 date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
 chmod 0400 /opt/flight/etc/shared-secret.conf
+
+# Generate new Console API key
+rm -f /opt/flight/etc/console-api/flight_console_api_key*
+ssh-keygen -b 521 -t ecdsa -f "/opt/flight/etc/console-api/flight_console_api_key" -q -N "" -C "Flight Console API Key"
+
+# Generate new Desktop API key
+rm -f /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/flight_desktop_api_key* 
+
+ssh-keygen -b 4096 -t rsa -f "/opt/flight/etc/desktop-restapi/id_rsa" -q -N "" -C "Flight Desktop RestAPI Key"
+ssh-keygen -b 521 -t ed25519 -f "/opt/flight/etc/desktop-restapi/flight_desktop_api_key" -q -N "" -C "Flight Desktop API Key"
+
+# Restart any running services (shouldn't be any, just to be safe)
 /opt/flight/bin/flight service stack restart
 EOF
 
