@@ -66,6 +66,9 @@ cat << EOF >> /opt/flight/etc/desktop-restapi.local.yaml
 command_timeout: 180
 EOF
 
+#patch file-manager-api first connection hang/crash
+sed -i 's/^# launch_timeout:.*/launch_timeout: 30/g' /opt/flight/etc/file-manager-api.yaml
+
 #allow generation of root user ssh keys
 sed -i 's/flight_SSH_LOWEST_UID=.*/flight_SSH_LOWEST_UID=0/g;s/flight_SSH_SKIP_USERS=.*/flight_SSH_SKIP_USERS="none"/g' /opt/flight/etc/setup-sshkey.rc
 
