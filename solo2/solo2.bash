@@ -72,6 +72,12 @@ sed -i 's/^# launch_timeout:.*/launch_timeout: 30/g' /opt/flight/etc/file-manage
 #allow generation of root user ssh keys
 sed -i 's/flight_SSH_LOWEST_UID=.*/flight_SSH_LOWEST_UID=0/g;s/flight_SSH_SKIP_USERS=.*/flight_SSH_SKIP_USERS="none"/g' /opt/flight/etc/setup-sshkey.rc
 
+#use ed25519 key type now ssh-rsa deprecated (EL9)
+if [[ $CENTOS_VER == 9 ]] ; then
+    sed -i 's/rsa/ed25519/g' /opt/flight/libexec/flight-starter/setup-sshkey
+fi
+
+#desktop bg image
 echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
 
 #desktop-restapi key for EL9
