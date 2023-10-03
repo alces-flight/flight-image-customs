@@ -270,14 +270,14 @@ if [ -f /opt/flight/cloudinit.in ]; then
         done
         IFS="$oIFS"
     fi
-
-    # Restart Service
-    /opt/flight/bin/flight service restart hunter
 else
     # Broadcast by default
     echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}"
     /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}
 fi
+
+# Restart Service
+/opt/flight/bin/flight service restart hunter
 EOF
 
 cat << 'EOF' > /var/lib/firstrun/scripts/03_pubkeyshare.bash
