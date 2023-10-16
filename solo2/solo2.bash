@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.5
+VERSION=2023.6
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -23,7 +23,7 @@ CENTOS_VER=$(rpm --eval '%{centos_ver}')
 
 if [[ $CENTOS_VER == 9 ]] ; then
     dnf config-manager --set-enabled crb
-    EXTRA_DNF_PACKAGES=""
+    EXTRA_DNF_PACKAGES="lsof"
 else
     dnf config-manager --set-enabled powertools
     EXTRA_DNF_PACKAGES="xorg-x11-apps"
@@ -36,6 +36,10 @@ dnf makecache
 #Installs
 
 dnf -y install flight-user-suite
+if [[ $CENTOS_VER == 9 ]] ; then
+    dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/9/x86_64/flight-desktop-1.11.5-1.el9.x86_64.rpm
+    dnf -y install ImageMagick
+fi
 dnf -y install flight-web-suite
 dnf -y install python3-websockify netpbm-progs $EXTRA_DNF_PACKAGES
 
@@ -62,10 +66,24 @@ cat << EOF >> /opt/flight/etc/desktop-restapi.local.yaml
 command_timeout: 180
 EOF
 
+#patch file-manager-api first connection hang/crash
+sed -i 's/^# launch_timeout:.*/launch_timeout: 30/g' /opt/flight/etc/file-manager-api.yaml
+
 #allow generation of root user ssh keys
 sed -i 's/flight_SSH_LOWEST_UID=.*/flight_SSH_LOWEST_UID=0/g;s/flight_SSH_SKIP_USERS=.*/flight_SSH_SKIP_USERS="none"/g' /opt/flight/etc/setup-sshkey.rc
 
+#use ed25519 key type now ssh-rsa deprecated (EL9)
+if [[ $CENTOS_VER == 9 ]] ; then
+    sed -i 's/rsa/ed25519/g' /opt/flight/libexec/flight-starter/setup-sshkey
+fi
+
+#desktop bg image
 echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
+
+#desktop-restapi key for EL9
+if [[ $CENTOS_VER == 9 ]] ; then
+    sed -i 's,^# ssh_private_key_path: .*,ssh_private_key_path: "etc/desktop-restapi/flight_desktop_api_key",g;s,^# ssh_public_key_path: .*,ssh_public_key_path: "etc/desktop-restapi/flight_desktop_api_key.pub",g' /opt/flight/etc/desktop-restapi.yaml
+fi
 
 #cloudinit overrides
 cat << "EOF" > /etc/cloud/cloud.cfg.d/50_solo2.cfg
@@ -88,7 +106,7 @@ autorun_mode: hunt
 include_self: true
 content_command: cat /opt/flight/opt/gather/var/data.yml
 auth_key: flight-solo
-short_hostname: true
+default_label: short
 default_start: '01'
 skip_used_index: true
 retry_interval: '15'
@@ -176,6 +194,12 @@ if [ -f /opt/flight/cloudinit.in ] ; then
     if [ ! -z "${PROFILE_ANSWERS}" ] ; then 
         /opt/flight/bin/flight profile configure --answers "$PROFILE_ANSWERS" --accept-defaults
     fi
+
+    # Prepare Auto Remove
+    if [ ! -z "${AUTOREMOVE}" ] ; then
+        echo "remove_on_shutdown: true" >> /opt/flight/opt/profile/etc/config.yml
+        echo "remove_hunter_entry: true" >> /opt/flight/opt/profile/etc/config.yml
+    fi
 fi
 EOF
 
@@ -234,7 +258,7 @@ if [ -f /opt/flight/cloudinit.in ]; then
         done
         IFS="$oIFS"
     fi
-    
+
     # Set Prefixes
     if [ ! -z "${PREFIX_STARTS}" ] ; then
         echo "prefix_starts:" >> /opt/flight/opt/hunter/etc/config.yml
@@ -246,18 +270,14 @@ if [ -f /opt/flight/cloudinit.in ]; then
         done
         IFS="$oIFS"
     fi
-
-    # Restart Service
-    /opt/flight/bin/flight service restart hunter
-
-    # Send
-    echo "  /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG"
-    /opt/flight/bin/flight hunter send $SEND_ARG $AUTH_ARG $IDENTITY_ARG
 else
     # Broadcast by default
     echo "  /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}"
     /opt/flight/bin/flight hunter send --broadcast --broadcast-address ${BROADCAST_ADDRESS}
 fi
+
+# Restart Service
+/opt/flight/bin/flight service restart hunter
 EOF
 
 cat << 'EOF' > /var/lib/firstrun/scripts/03_pubkeyshare.bash
@@ -285,7 +305,7 @@ cat << 'EOF' > /var/lib/firstrun/scripts/04_getpubkey.bash
 if [ -f /opt/flight/cloudinit.in ] ; then
     source /opt/flight/cloudinit.in
     if [ ! -z ${SERVER} ] ; then
-        count=10
+        count=120
         until socat -u TCP:$SERVER:1234 STDOUT >> /root/.ssh/authorized_keys ; do
             sleep 1
             count=$((count - 1))
@@ -298,9 +318,19 @@ if [ -f /opt/flight/cloudinit.in ] ; then
 fi
 EOF
 
-cat << 'EOF' > /var/lib/firstrun/scripts/99_flightpatches.bash
+cat << 'EOF' > /var/lib/firstrun/scripts/00_flightpatches.bash
+# Generate new shared secret
 date +%s.%N | sha256sum | cut -c 1-40 > /opt/flight/etc/shared-secret.conf
 chmod 0400 /opt/flight/etc/shared-secret.conf
+
+# Generate new Console API key
+ssh-keygen -b 521 -t ecdsa -f "/opt/flight/etc/console-api/flight_console_api_key" -q -N "" -C "Flight Console API Key"
+
+# Generate new Desktop API key
+ssh-keygen -b 4096 -t rsa -f "/opt/flight/etc/desktop-restapi/id_rsa" -q -N "" -C "Flight Desktop RestAPI Key"
+ssh-keygen -b 521 -t ed25519 -f "/opt/flight/etc/desktop-restapi/flight_desktop_api_key" -q -N "" -C "Flight Desktop API Key"
+
+# Restart any running services (shouldn't be any, just to be safe)
 /opt/flight/bin/flight service stack restart
 EOF
 
@@ -308,8 +338,16 @@ dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
 
 flight profile prepare openflight-slurm-standalone
+if [[ $CENTOS_VER == 9 ]] ; then
+    # Update IPA installation for EL9
+    sed -i '/dnf module .* idm.*/d;s/# IPA/# IPA\ndnf -y install freeipa-server freeipa-server-dns freeipa-client/g' /opt/flight/usr/lib/profile/types/openflight-slurm-multinode/prepare.sh
+fi
 flight profile prepare openflight-slurm-multinode
 flight profile prepare openflight-kubernetes-multinode
+if [[ $CENTOS_VER == 9 ]] ; then 
+    # Ensure pip installed for EL9
+    sed -i 's/python39/python39 python3-pip/g' /opt/flight/usr/lib/profile/types/openflight-jupyter-standalone/prepare.sh
+fi
 flight profile prepare openflight-jupyter-standalone
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
@@ -377,8 +415,10 @@ EOF
 
 systemctl daemon-reload
 
-#remove key generated on rpm install and allow firstrun 99_flightpatches.bash to do it another way
-rm -v /opt/flight/etc/shared-secret.conf
+#remove keys generated on rpm install and allow firstrun 00_flightpatches.bash to do it another way
+rm -fv /opt/flight/etc/shared-secret.conf
+rm -fv /opt/flight/etc/console-api/flight_console_api_key*
+rm -fv /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/flight_desktop_api_key* 
 
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
