@@ -338,10 +338,6 @@ dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
 
 flight profile prepare openflight-slurm-standalone
-if [[ $CENTOS_VER == 9 ]] ; then
-    # Update IPA installation for EL9
-    sed -i '/dnf module .* idm.*/d;s/# IPA/# IPA\ndnf -y install freeipa-server freeipa-server-dns freeipa-client/g' /opt/flight/usr/lib/profile/types/openflight-slurm-multinode/prepare.sh
-fi
 flight profile prepare openflight-slurm-multinode
 flight profile prepare openflight-kubernetes-multinode
 flight profile prepare openflight-jupyter-standalone
