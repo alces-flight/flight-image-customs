@@ -353,6 +353,7 @@ echo "software_dir: ~/apps" >> /opt/flight/opt/silo/etc/config.yml
 sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
 sed -i 's/flight_STARTER_product=.*/flight_STARTER_product="Flight Solo"/g' /opt/flight/etc/flight-starter.*
 sed -i "s/flight_STARTER_release=.*/flight_STARTER_release='$VERSION'/g" /opt/flight/etc/flight-starter.*
+sed -i 's,flight_STARTER_help_url=.*,flight_STARTER_help_url="https://openflighthpc.org/latest/docs",g' /opt/flight/etc/flight-starter.*
 
 cat << 'EOF' > /usr/lib/systemd/system/flight-service.service
 # =============================================================================
