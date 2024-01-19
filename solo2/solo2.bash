@@ -54,6 +54,8 @@ sleep 2
 systemctl enable flight-service
 . /etc/profile.d/zz-flight-starter.sh
 flight set --global always on
+flight set --global hunter on 
+flight set --global profile on
 flight start
 flight desktop prepare gnome 
 
