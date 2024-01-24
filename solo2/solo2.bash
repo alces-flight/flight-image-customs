@@ -54,8 +54,6 @@ sleep 2
 systemctl enable flight-service
 . /etc/profile.d/zz-flight-starter.sh
 flight set --global always on
-flight set --global hunter on 
-flight set --global profile on
 flight start
 flight desktop prepare gnome 
 
@@ -100,6 +98,7 @@ firewall-offline-cmd --add-service http
 
 #mutlinode stuff
 dnf -y install flight-gather flight-hunter
+flight set --global hunter on 
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
@@ -337,6 +336,7 @@ EOF
 
 dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
+flight set --global profile on
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
