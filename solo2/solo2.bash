@@ -40,7 +40,7 @@ if [[ $CENTOS_VER == 9 ]] ; then
     dnf -y install ImageMagick
 fi
 dnf -y install flight-web-suite
-dnf -y install python3-websockify netpbm-progs $EXTRA_DNF_PACKAGES
+dnf -y install python3-websockify netpbm-progs socat $EXTRA_DNF_PACKAGES
 
 dnf -y install alces-flight-landing-page-branding
 
