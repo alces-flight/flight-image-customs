@@ -340,7 +340,7 @@ flight set --global profile on
 
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
-flight profile prepare openflight-kubernetes-multinode
+#flight profile prepare openflight-kubernetes-multinode
 flight profile prepare openflight-jupyter-standalone
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
