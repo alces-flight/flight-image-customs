@@ -1,5 +1,5 @@
 # Version tag
-VERSION=2023.6
+VERSION=2024.1
 DATE="$(date +'%Y-%m-%d_%H-%M-%S')"
 BUILDVERSION="flightsolo-${VERSION}_${DATE}"
 echo $BUILDVERSION > /etc/solo-release
@@ -37,11 +37,10 @@ dnf makecache
 
 dnf -y install flight-user-suite
 if [[ $CENTOS_VER == 9 ]] ; then
-    dnf -y install https://repo.openflighthpc.org/openflight-dev/centos/9/x86_64/flight-desktop-1.11.5-1.el9.x86_64.rpm
     dnf -y install ImageMagick
 fi
 dnf -y install flight-web-suite
-dnf -y install python3-websockify netpbm-progs $EXTRA_DNF_PACKAGES
+dnf -y install python3-websockify netpbm-progs socat $EXTRA_DNF_PACKAGES
 
 dnf -y install alces-flight-landing-page-branding
 
@@ -99,6 +98,7 @@ firewall-offline-cmd --add-service http
 
 #mutlinode stuff
 dnf -y install flight-gather flight-hunter
+flight set --global hunter on 
 
 cat << EOF > /opt/flight/opt/hunter/etc/config.yml
 port: 8888
@@ -336,18 +336,11 @@ EOF
 
 dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
+flight set --global profile on
 
 flight profile prepare openflight-slurm-standalone
-if [[ $CENTOS_VER == 9 ]] ; then
-    # Update IPA installation for EL9
-    sed -i '/dnf module .* idm.*/d;s/# IPA/# IPA\ndnf -y install freeipa-server freeipa-server-dns freeipa-client/g' /opt/flight/usr/lib/profile/types/openflight-slurm-multinode/prepare.sh
-fi
 flight profile prepare openflight-slurm-multinode
-flight profile prepare openflight-kubernetes-multinode
-if [[ $CENTOS_VER == 9 ]] ; then 
-    # Ensure pip installed for EL9
-    sed -i 's/python39/python39 python3-pip/g' /opt/flight/usr/lib/profile/types/openflight-jupyter-standalone/prepare.sh
-fi
+#flight profile prepare openflight-kubernetes-multinode
 flight profile prepare openflight-jupyter-standalone
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
@@ -362,6 +355,7 @@ echo "software_dir: ~/apps" >> /opt/flight/opt/silo/etc/config.yml
 sed -i 's/flight_STARTER_desc=.*/flight_STARTER_desc="an Alces Flight Solo HPC environment"/g' /opt/flight/etc/flight-starter.*
 sed -i 's/flight_STARTER_product=.*/flight_STARTER_product="Flight Solo"/g' /opt/flight/etc/flight-starter.*
 sed -i "s/flight_STARTER_release=.*/flight_STARTER_release='$VERSION'/g" /opt/flight/etc/flight-starter.*
+sed -i 's,flight_STARTER_help_url=.*,flight_STARTER_help_url="https://openflighthpc.org/latest/docs",g' /opt/flight/etc/flight-starter.*
 
 cat << 'EOF' > /usr/lib/systemd/system/flight-service.service
 # =============================================================================
