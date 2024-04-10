@@ -70,6 +70,7 @@ fi
 
 #desktop bg image
 echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
+echo "timeout: 15" >> /opt/flight/opt/desktop/etc/config.yml
 
 #desktop-restapi key for EL9
 if [[ $CENTOS_VER == 9 ]] ; then
