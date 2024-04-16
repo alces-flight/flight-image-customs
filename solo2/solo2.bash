@@ -407,6 +407,9 @@ rm -fv /opt/flight/etc/shared-secret.conf
 rm -fv /opt/flight/etc/console-api/flight_console_api_key*
 rm -fv /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/flight_desktop_api_key* 
 
+#remove machine-id file so subsequent booted images have unique identifier
+rm -f /etc/machine-id
+
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
 dnf makecache
