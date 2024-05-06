@@ -11,6 +11,12 @@ name=OpenFlight - Base
 baseurl=https://repo.openflighthpc.org/openflight/centos/$releasever/$basearch/
 enabled=1
 gpgcheck=0
+
+[alcesflight]
+name=AlcesFlight - Base
+baseurl=https://alces-flight.s3-eu-west-1.amazonaws.com/repos/alces-flight/centos/$releasever/$basearch/
+enabled=1
+gpgcheck=0
 EOF
 
 CENTOS_VER=$(rpm --eval '%{centos_ver}')
