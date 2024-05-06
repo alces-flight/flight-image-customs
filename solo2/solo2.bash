@@ -341,6 +341,7 @@ flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
 #flight profile prepare openflight-kubernetes-multinode
 flight profile prepare openflight-jupyter-standalone
+flight profile prepare openflight-web-access
 
 cat << EOF >> /opt/flight/opt/profile/etc/config.yml
 use_hunter: true
