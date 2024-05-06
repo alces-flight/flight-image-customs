@@ -416,6 +416,7 @@ rm -fv /opt/flight/etc/desktop-restapi/id_rsa* /opt/flight/etc/desktop-restapi/f
 
 #remove machine-id file so subsequent booted images have unique identifier
 rm -f /etc/machine-id
+touch /etc/machine-id
 
 #Cleanup
 rm /etc/yum.repos.d/solo2.repo
