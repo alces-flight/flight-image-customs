@@ -74,8 +74,7 @@ if [[ $CENTOS_VER == 9 ]] ; then
     sed -i 's/rsa/ed25519/g' /opt/flight/libexec/flight-starter/setup-sshkey
 fi
 
-#desktop bg image
-echo "bg_image: /opt/flight/etc/assets/backgrounds/alces-flight.jpg" >> /opt/flight/opt/desktop/etc/config.yml
+#increase desktop timeout
 echo "timeout: 15" >> /opt/flight/opt/desktop/etc/config.yml
 
 #desktop-restapi key for EL9
