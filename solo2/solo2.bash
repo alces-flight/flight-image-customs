@@ -336,6 +336,9 @@ dnf -y install flight-profile flight-profile-types flight-profile-api
 dnf -y install flight-pdsh
 flight set --global profile on
 
+# ensure pip installed (failed on clean Rocky 9 image)
+python3 -m ensurepip
+
 flight profile prepare openflight-slurm-standalone
 flight profile prepare openflight-slurm-multinode
 #flight profile prepare openflight-kubernetes-multinode
