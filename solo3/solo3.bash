@@ -143,6 +143,8 @@ sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/desktop/lib/desktop/type.rb
 sed -i "s/gem 'bundler'.*/gem 'bundler'/g" $flight_ROOT/opt/desktop/bin/desktop
 sed -i "s,^require_relative 'patches/unicode-display_width',#require_relative 'patches/unicode-display_width',g" $flight_ROOT/opt/desktop/lib/desktop/type.rb
 sed -i 's/extend FlightConfiguration::DSL/include FlightConfiguration::DSL/g' $flight_ROOT/opt/desktop/lib/desktop/config.rb
+sed -i "s/ERB.new(<<~TEMPLATE, nil, '-')/ERB.new(<<~TEMPLATE, trim_mode: '-')/g" $flight_ROOT/opt/desktop/lib/desktop/cli.rb # Fixes safe_level deprecation warning
+sed -i 's/ENV.clone/ENV.to_h/g' $flight_ROOT/opt/desktop/lib/desktop/command_utils.rb # Fixes 'Error, Cannot clone ENV'
 
 cat << EOF > $flight_ROOT/opt/desktop/etc/config.yml
 type_paths:
