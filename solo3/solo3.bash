@@ -11,6 +11,10 @@ flight_ROOT="/opt/flight"
 # Third Party Versions
 VERSION_RUBY_BUILD="v20240530.1"
 VERSION_RUBY=3.3.2
+VERSION_NGINX=1.21.4
+VERSION_PYTHON=3.8.10
+VERSION_NODE=14.19.0
+VERSION_YARN=1.22.17
 
 # Flight Tool Versions
 VERSION_RUNWAY=1.2.0
@@ -20,6 +24,10 @@ VERSION_DESKTOP=1.11.6
 VERSION_DESKTOP_TYPES=1.3.6
 VERSION_ENV=1.5.2
 VERSION_ENV_TYPES=1.0.8
+VERSION_CERT=0.6.1
+VERSION_LANDING_PAGE=2.0.2
+VERSION_WEBAPP_COMPONENTS=1.0.1
+
 
 # Functions 
 command_file() {
@@ -64,6 +72,9 @@ dnf install -y autoconf gcc rust patch make bzip2 openssl-devel libyaml-devel li
 dnf -y install wget # Used by flight env types
 dnf -y install epel-release # Use for some desktop deps, maybe some other stuff too?
 
+setenforce 0 
+sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+
 # Flight Runway
 git clone -b $VERSION_RUNWAY https://github.com/openflighthpc/flight-runway $flight_ROOT
 
@@ -84,11 +95,14 @@ for a in bundle gem irb rake ruby ; do
   ln -s $(which $a) $a
 done
 
+$flight_ROOT/bin/gem install paint --version 2.1.0 --bindir $flight_ROOT/opt/ruby/bin/ --no-document # Dep for banner stuff
+
 cd $flight_ROOT
-mv -f pkg/bin/flintegrate bin/flintegrate
-mv -f pkg/bin/banner bin/banner
-mkdir -p $flight_ROOT/opt/runway
+mkdir -p $flight_ROOT/opt/runway/bin/
+mv -f pkg/bin/flintegrate $flight_ROOT/opt/runway/bin/flintegrate
+mv -f pkg/bin/banner $flight_ROOT/opt/runway/bin/banner
 mv pkg/dist $flight_ROOT/opt/runway
+mv pkg/ruby/openflight* $flight_ROOT/opt/ruby/lib/ruby/site_ruby/*/x86_64-linux/
 
 # Flight Starter
 git clone -b $VERSION_STARTER https://github.com/openflighthpc/flight-starter /tmp/flight-starter
@@ -108,7 +122,7 @@ command_file howto $VERSION_HOWTO 'View user guides for your HPC environment'
 cat << 'EOF' >> $flight_ROOT/libexec/commands/howto
 export RUBYOPT='-W0'
 export FLIGHT_CWD=$(pwd)
-cd /opt/flight/opt/howto
+cd $flight_ROOT/opt/howto
 export FLIGHT_PROGRAM_NAME="${flight_NAME} $(basename $0)"
 flexec bundle exec bin/howto "$@"
 EOF
@@ -153,14 +167,14 @@ type_paths:
 global_state_path: $flight_ROOT/var/lib/desktop
 global_log_path: $flight_ROOT/var/log/desktop
 websockify_paths:
-  - /opt/flight/opt/websockify/bin/websockify
+  - $flight_ROOT/opt/websockify/bin/websockify
   - /usr/bin/websockify
 EOF
 
 command_file desktop $VERSION_DESKTOP 'Manage interactive GUI desktop sessions'
 cat << 'EOF' >> $flight_ROOT/libexec/commands/desktop
 export FLIGHT_CWD=$(pwd)
-cd /opt/flight/opt/desktop
+cd $flight_ROOT/opt/desktop
 export FLIGHT_PROGRAM_NAME="${flight_NAME} $(basename $0)"
 flexec bundle exec bin/desktop "$@"
 EOF
@@ -197,7 +211,7 @@ EOF
 command_file env $VERSION_ENV 'Manage and access HPC application ecosystems'
 cat << 'EOF' >> $flight_ROOT/libexec/commands/env
 export FLIGHT_CWD=$(pwd)
-cd /opt/flight/opt/env
+cd $flight_ROOT/opt/env
 export FLIGHT_PROGRAM_NAME="${flight_NAME} $(basename $0)"
 # The following 'exec .../bundle' incantation is used to ensure that flenv
 # receives the correct parent shell, rather than the shell of this
@@ -276,7 +290,397 @@ git clone -b $VERSION_ENV_TYPES https://github.com/openflighthpc/flight-env-type
 # Flight Web Suite 
 #
 
-# Probs adapt sf dev script for source running 
+# Nginx / WWW
+dnf -y install pcre-devel
+wget -O /tmp/nginx-${VERSION_NGINX}.tar.gz https://nginx.org/download/nginx-${VERSION_NGINX}.tar.gz
+cd /tmp/
+tar xf nginx-${VERSION_NGINX}.tar.gz
+cd nginx-${VERSION_NGINX}
+./configure --prefix=$flight_ROOT/opt/www/embedded --with-http_ssl_module --with-http_stub_status_module --with-ipv6 --with-debug --with-cc-opt="-L${flight_ROOT}/opt/www/embedded/lib -I${flight_ROOT}/opt/www/embedded/include" --with-ld-opt=-L${flight_ROOT}/opt/www/embedded/lib
+make -j $(nproc)
+make install
+
+mkdir -p $flight_ROOT/etc/www/
+cat << EOF > $flight_ROOT/etc/www/nginx.conf
+user nobody ;
+worker_processes 1;
+error_log $flight_ROOT/var/log/www/error.log warn;
+pid $flight_ROOT/var/run/www.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include $flight_ROOT/opt/www/embedded/conf/mime.types;
+    include $flight_ROOT/etc/www/mime.types;
+    default_type application/octet-stream;
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                    '\$status \$body_bytes_sent "\$http_referer" '
+                    '"\$http_user_agent" "\$http_x_forwarded_for"';
+    access_log $flight_ROOT/var/log/www/access.log main;
+    sendfile on;
+    #tcp_nopush on;
+    keepalive_timeout 65;
+    gzip on;
+    error_page 404 @not-found;
+    include $flight_ROOT/etc/www/http.d/*.conf;
+}
+EOF
+
+mkdir $flight_ROOT/etc/logrotate.d/
+cat << EOF > $flight_ROOT/etc/logrotate.d/www
+# Rotate Flight WWW logs
+$flight_ROOT/var/log/www/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 640 nobody adm
+    sharedscripts
+      postrotate
+      [ -f $flight_ROOT/var/run/www.pid ] && kill -USR1 \`cat $flight_ROOT/var/run/www.pid\`
+    endscript
+}
+EOF
+
+mkdir -p $flight_ROOT/etc/service/types/www/
+#TODO: Package these up or store them in a separate repo?
+for i in configuration.yml configure.sh metadata.yml reload.sh restart.sh start.sh stop.sh ; do 
+    wget -O $flight_ROOT/etc/service/types/www/$i https://raw.githubusercontent.com/openflighthpc/openflight-omnibus-builder/master/builders/flight-www/opt/flight/etc/service/types/www/$i 
+done
+
+mkdir -p  $flight_ROOT/etc/www/{http.d,server-http.d,server-https.d}
+#TODO: Package these up or store them in a separate repo?
+for i in http.d/base-http.conf http.d/geo.conf http.d/https.conf.disabled server-http.d/document-root.conf server-http.d/redirect-http-to-https.conf.disabled server-https.d/document-root.conf server-https.d/downloads.conf server-https.d/ssl-config.conf server-https.d/websocket-proxy.conf error-locations.conf mime.types; do 
+    wget -O $flight_ROOT/etc/www/$i https://raw.githubusercontent.com/openflighthpc/openflight-omnibus-builder/master/builders/flight-www/opt/flight/etc/www/$i
+    sed -i "s,/opt/flight,$flight_ROOT,g" $flight_ROOT/etc/www/$i
+done
+
+command_file www $VERSION_CERT 'Manage the HTTPs server and SSL certificates'
+cat << 'EOF' >> $flight_ROOT/libexec/commands/www
+if [ "$UID" != 0 ]; then
+  exec sudo "${flight_ROOT}"/bin/flight "$(basename "$0")" "$@"
+fi
+
+export FLIGHT_PROGRAM_NAME='flight www'
+export FLIGHT_CWD=$(pwd)
+cd "${flight_ROOT}"/opt/www/cert
+${flight_ROOT}/bin/flexec bundle exec bin/cert "$@"
+EOF
+
+
+# Flight Cert
+git clone -b $VERSION_CERT https://github.com/openflighthpc/flight-cert $flight_ROOT/opt/www/cert
+
+cd $flight_ROOT/opt/www/cert
+rm -f Gemfile.lock # TODO: Fix for jump from Ruby 2.7 -> 3.3.2
+sed -i "s|gem 'flight_configuration'.*|gem 'flight_configuration', github: 'openflighthpc/flight_configuration'|g" Gemfile #TODO: Implement this fix
+$flight_ROOT/bin/bundle config set --local path vendor
+$flight_ROOT/bin/bundle config set --local with default
+$flight_ROOT/bin/bundle config set --local without development
+$flight_ROOT/bin/bundle install
+
+#TODO: Docs in flight-cert still think it should be "production" not integrated
+cat << 'EOF' > $flight_ROOT/opt/www/cert/.flight-environment
+flight_ENVIRONMENT=integrated
+EOF
+
+cat << EOF > $flight_ROOT/etc/cert.yaml
+program_name: flight www
+certbot_bin: $flight_ROOT/opt/certbot/bin/certbot
+certbot_plugin_flags: --nginx --nginx-ctl $flight_ROOT/opt/www/embedded/sbin/nginx --nginx-server-root $flight_ROOT/etc/www --config-dir $flight_ROOT/etc/letsencrypt --logs-dir $flight_ROOT/var/log/letsencrypt --work-dir $flight_ROOT/var/lib/letsencrypt
+cron_script: "#!/bin/bash\n$flight_ROOT/bin/flight www cert-gen\n"
+https_enable_paths:
+  - $flight_ROOT/etc/www/http.d/https.conf
+  - $flight_ROOT/etc/www/server-http.d/redirect-http-to-https.conf
+status_command: $flight_ROOT/bin/flight service status www | grep active
+restart_command: $flight_ROOT/bin/flight service restart www | grep 'service has been restarted'
+start_command_prompt: $flight_ROOT/bin/flight service start www
+EOF
+
+#TODO: Apply these patches
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/www/cert/lib/flight_cert/commands/cert_install.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/www/cert/lib/flight_cert/commands/cron_renewal.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/www/cert/lib/flight_cert/commands/disable_https.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/www/cert/lib/flight_cert/commands/enable_https.rb
+
+# Flight Python
+dnf -y install bzip2-devel
+
+wget -O /tmp/Python-$VERSION_PYTHON.tgz https://www.python.org/ftp/python/${VERSION_PYTHON}/Python-${VERSION_PYTHON}.tgz
+cd /tmp/
+tar xf Python-$VERSION_PYTHON.tgz
+cd Python-$VERSION_PYTHON
+
+./configure --enable-shared --prefix=$flight_ROOT/opt/python/ LDFLAGS="-Wl,--rpath=$flight_ROOT/opt/python/lib"
+make -j $(nproc)
+make -j $(nproc) install
+
+# Biff tests to save ~75MB 
+#rm -rf $(find $flight_ROOT/opt/python/lib/python*/test $flight_ROOT/opt/python/lib/python*/*/test $flight_ROOT/opt/python/lib/python*/*/tests) #defo broke things running it like this
+
+# Biff static libpython for ~25MB
+#rm -rf $(find $flight_ROOT/opt/python/lib/python*/config-*-x86_64-linux-gnu) # this might break things, don't think so but python borked
+
+cd $flight_ROOT/opt/python/bin/
+ln -s python3 python
+ln -s pip3 pip
+
+for i in python3 python pip3 pip ; do 
+    ln -s $flight_ROOT/opt/python/bin/$i $flight_ROOT/bin/
+done
+
+cat << 'EOF' > $flight_ROOT/bin/pip3
+_setup() {
+  local a xdg_config
+  IFS=: read -a xdg_config <<< "${XDG_CONFIG_HOME:-$HOME/.config}:${XDG_CONFIG_DIRS:-/etc/xdg}"
+  for a in "${xdg_config[@]}"; do
+    if [ -e "${a}"/flight.rc ]; then
+      source "${a}"/flight.rc
+      break
+    fi
+  done
+  if [ -d "${flight_ROOT}"/libexec/hooks ]; then
+    shopt -s nullglob
+    for a in "${flight_ROOT}"/libexec/hooks/*.sh; do
+      source "${a}"
+    done
+    shopt -u nullglob
+  fi
+}
+
+flight_ROOT=${flight_ROOT:-$(cd $(dirname ${BASH_SOURCE[0]})/.. && pwd)}
+_setup
+unset _setup
+
+exec ${flight_ROOT}/opt/python/bin/pip3 "$@"
+EOF
+
+cat << 'EOF' > $flight_ROOT/bin/python3
+_setup() {
+  local a xdg_config
+  IFS=: read -a xdg_config <<< "${XDG_CONFIG_HOME:-$HOME/.config}:${XDG_CONFIG_DIRS:-/etc/xdg}"
+  for a in "${xdg_config[@]}"; do
+    if [ -e "${a}"/flight.rc ]; then
+      source "${a}"/flight.rc
+      break
+    fi
+  done
+  if [ -d "${flight_ROOT}"/libexec/hooks ]; then
+    shopt -s nullglob
+    for a in "${flight_ROOT}"/libexec/hooks/*.sh; do
+      source "${a}"
+    done
+    shopt -u nullglob
+  fi
+}
+
+flight_ROOT=${flight_ROOT:-$(cd $(dirname ${BASH_SOURCE[0]})/.. && pwd)}
+_setup
+unset _setup
+
+exec ${flight_ROOT}/opt/python/bin/python3 "$@"
+EOF
+
+cd $flight_ROOT/bin/
+ln -s python3 python
+ln -s pip3 pip
+
+chmod +x $flight_ROOT/bin/python* $flight_ROOT/bin/pip*
+
+# Flight Certbot
+PATH="$flight_ROOT/opt/python/bin:$PATH"
+mkdir -p $flight_ROOT/opt/certbot
+cd $flight_ROOT/opt/certbot
+
+pip3 install pipenv
+
+cat << 'EOF' > $flight_ROOT/opt/certbot/Pipfile
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+certbot = "*"
+certbot-nginx = "*"
+EOF
+
+PIPENV_VENV_IN_PROJECT=true
+pipenv install
+mkdir bin
+for i in $(ls .venv/bin/) ; do 
+    ln -s ../.venv/bin/$i bin/$i
+done
+
+# Flight Landing Page
+mkdir -p $flight_ROOT/opt/www/src/
+git clone  -b $VERSION_LANDING_PAGE https://github.com/openflighthpc/flight-landing-page /tmp/landing-page 
+cp -a /tmp/landing-page/{bin,Gemfile,landing-page} $flight_ROOT/opt/www/landing-page
+mkdir -p $flight_ROOT/opt/www/landing-page/branding/{content,layouts}
+
+mkdir -p $flight_ROOT/usr/share/www/downloads/config-packs/
+
+cd $flight_ROOT/opt/www/
+$flight_ROOT/bin/bundle config set --local path vendor
+$flight_ROOT/bin/bundle config set --local with default
+$flight_ROOT/bin/bundle config set --local without development
+$flight_ROOT/bin/bundle install
+
+#TODO: Include this with repo
+wget -O $flight_ROOT/opt/www/bin/landing-page https://raw.githubusercontent.com/openflighthpc/openflight-omnibus-builder/master/builders/flight-www/opt/flight/opt/www/bin/landing-page
+chmod +x $flight_ROOT/opt/www/bin/landing-page
+sed -i 's,/opt/flight,$flight_ROOT,g' $flight_ROOT/opt/www/bin/landing-page
+
+#TODO: Apply these patches
+cat << 'EOF' > $flight_ROOT/opt/www/landing-page/lib/attributes_to_content.rb
+class AttributesToContent < Nanoc::Filter
+  identifier :attributes_to_content
+
+  def run(content, item)
+    if item.is_a? Hash
+      item = item[:item]
+    end
+    item.attributes.to_h
+  end
+end
+EOF
+sed -i 's/metadata_content, \*\*kwargs/metadata_content, kwargs/g' $flight_ROOT/opt/www/landing-page/lib/metadata_to_json.rb
+sed -i 's/content, keys:/content, keys/g' $flight_ROOT/opt/www/landing-page/lib/prefix_url.rb
+
+cat << EOF > $flight_ROOT/libexec/commands/landing-page
+: '
+: NAME: landing-page
+: SYNOPSIS: Flight WWW landing page
+: VERSION: $VERSION_LANDING_PAGE
+: ROOT: true
+: '
+if [ "\$UID" != 0 ]; then
+  exec sudo "\${flight_ROOT}"/bin/flight "\$(basename "\$0")" "\$@"
+fi
+
+"\${flight_ROOT}"/opt/www/bin/landing-page "\$@"
+EOF
+
+# Flight NodeJS
+wget -O /tmp/node-v${VERSION_NODE}.tar.gz https://nodejs.org/dist/v${VERSION_NODE}/node-v${VERSION_NODE}-linux-x64.tar.gz
+cd /tmp/
+tar xf node-v${VERSION_NODE}.tar.gz
+mv node-v${VERSION_NODE}-linux-x64 $flight_ROOT/opt/nodejs/
+
+cat << 'EOF' > $flight_ROOT/bin/node
+_setup() {
+  local a xdg_config
+  IFS=: read -a xdg_config <<< "${XDG_CONFIG_HOME:-$HOME/.config}:${XDG_CONFIG_DIRS:-/etc/xdg}"
+  for a in "${xdg_config[@]}"; do
+    if [ -e "${a}"/flight.rc ]; then
+      source "${a}"/flight.rc
+      break
+    fi
+  done
+  if [ -d "${flight_ROOT}"/libexec/hooks ]; then
+    shopt -s nullglob
+    for a in "${flight_ROOT}"/libexec/hooks/*.sh; do
+      source "${a}"
+    done
+    shopt -u nullglob
+  fi
+}
+
+flight_ROOT=${flight_ROOT:-$(cd $(dirname ${BASH_SOURCE[0]})/.. && pwd)}
+_setup
+unset _setup
+
+exec ${flight_ROOT}/opt/nodejs/bin/node "$@"
+EOF
+chmod +x $flight_ROOT/bin/node
+
+cat << 'EOF' > $flight_ROOT/bin/npm
+_setup() {
+  local a xdg_config
+  IFS=: read -a xdg_config <<< "${XDG_CONFIG_HOME:-$HOME/.config}:${XDG_CONFIG_DIRS:-/etc/xdg}"
+  for a in "${xdg_config[@]}"; do
+    if [ -e "${a}"/flight.rc ]; then
+      source "${a}"/flight.rc
+      break
+    fi
+  done
+  if [ -d "${flight_ROOT}"/libexec/hooks ]; then
+    shopt -s nullglob
+    for a in "${flight_ROOT}"/libexec/hooks/*.sh; do
+      source "${a}"
+    done
+    shopt -u nullglob
+  fi
+}
+
+flight_ROOT=${flight_ROOT:-$(cd $(dirname ${BASH_SOURCE[0]})/.. && pwd)}
+_setup
+unset _setup
+
+exec /opt/flight/bin/node /opt/flight/opt/nodejs/bin/npm "$@"
+EOF
+chmod +x $flight_ROOT/bin/npm
+
+# Flight Yarn 
+wget -O /tmp/yarn-v${VERSION_YARN}.tar.gz https://github.com/yarnpkg/yarn/releases/download/v${VERSION_YARN}/yarn-v${VERSION_YARN}.tar.gz
+cd /tmp/
+tar xf yarn-v${VERSION_YARN}.tar.gz
+rsync -au yarn-v${VERSION_YARN}/{bin,lib,package.json,preinstall.js} $flight_ROOT/opt/nodejs/
+
+cat << 'EOF' > $flight_ROOT/bin/yarn
+_setup() {
+  local a xdg_config
+  IFS=: read -a xdg_config <<< "${XDG_CONFIG_HOME:-$HOME/.config}:${XDG_CONFIG_DIRS:-/etc/xdg}"
+  for a in "${xdg_config[@]}"; do
+    if [ -e "${a}"/flight.rc ]; then
+      source "${a}"/flight.rc
+      break
+    fi
+  done
+  if [ -d "${flight_ROOT}"/libexec/hooks ]; then
+    shopt -s nullglob
+    for a in "${flight_ROOT}"/libexec/hooks/*.sh; do
+      source "${a}"
+    done
+    shopt -u nullglob
+  fi
+}
+
+flight_ROOT=${flight_ROOT:-$(cd $(dirname ${BASH_SOURCE[0]})/.. && pwd)}
+_setup
+unset _setup
+
+exec ${flight_ROOT}/bin/node \
+     ${flight_ROOT}/opt/nodejs/bin/yarn.js "$@"
+EOF
+chmod +x $flight_ROOT/bin/yarn
+
+# Flight WebApp Components
+git clone -b $VERSION_WEBAPP_COMPONENTS https://github.com/openflighthpc/flight-webapp-components /tmp/flight-webapp-components
+cd /tmp/flight-webapp-components
+
+export REACT_APP_LOGIN_API_BASE_URL="/login/api/v0"
+export PATH="$flight_ROOT/bin/:$PATH"
+yarn install
+yarn run build
+cd builder
+yarn add react-router-dom
+yarn install
+yarn run build
+cd ..
+bash bin/setup-yarn-link-webapp-components.sh
+mkdir -p $flight_ROOT/opt/www/landing-page/default/content/{js,styles}
+cp -vf builder/build/static/js/main.js $flight_ROOT/opt/www/landing-page/default/content/js/login.js
+cp -vf builder/build/static/css/main.css $flight_ROOT/opt/www/landing-page/default/content/styles/login.css
+
+# Flight Service 
+
 
 
 #
@@ -285,4 +689,6 @@ git clone -b $VERSION_ENV_TYPES https://github.com/openflighthpc/flight-env-type
 rm -rf /tmp/ruby-build
 rm -rf /tmp/flight-starter
 rm -rf /opt/flight/pkg
-
+rm -rf /tmp/nginx-${VERSION_NGINX} /tmp/nginx-${VERSION_NGINX}.tar.gz
+rm -rf /tmp/Python-${VERSION_PYTHON} /tmp/Python-${VERSION_PYTHON}.tgz
+rm -rf /tmp/landing-page
