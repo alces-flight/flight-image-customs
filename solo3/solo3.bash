@@ -27,6 +27,7 @@ VERSION_ENV_TYPES=1.0.8
 VERSION_CERT=0.6.1
 VERSION_LANDING_PAGE=2.0.2
 VERSION_WEBAPP_COMPONENTS=1.0.1
+VERSION_SERVICE=1.5.0
 
 
 # Functions 
@@ -680,8 +681,50 @@ cp -vf builder/build/static/js/main.js $flight_ROOT/opt/www/landing-page/default
 cp -vf builder/build/static/css/main.css $flight_ROOT/opt/www/landing-page/default/content/styles/login.css
 
 # Flight Service 
+git clone -b $VERSION_SERVICE https://github.com/openflighthpc/flight-service $flight_ROOT/opt/service
 
+cd $flight_ROOT/opt/service
+rm -f Gemfile.lock
+echo "gem 'abbrev'" >> Gemfile # TODO: Fix for "warning: abbrev was loaded from the standard library, but will no longer be part of the default gems since Ruby 3.4.0"
+#TODO: Bump commander-openflighthpc cos it's locked to old one
+$flight_ROOT/bin/bundle config set --local path vendor
+$flight_ROOT/bin/bundle config set --local with default
+$flight_ROOT/bin/bundle config set --local without development
+$flight_ROOT/bin/bundle install
 
+#TODO: Apply these patches
+sed -i "s,^require_relative 'patches/unicode-display_width',#require_relative 'patches/unicode-display_width',g" $flight_ROOT/opt/service/lib/service/cli.rb
+sed -i "s,^require_relative 'patches/unicode-display_width',#require_relative 'patches/unicode-display_width',g" $flight_ROOT/opt/service/lib/service/command_utils.rb
+sed -i "s,^require_relative 'patches/unicode-display_width',#require_relative 'patches/unicode-display_width',g" $flight_ROOT/opt/service/lib/service/table.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/service/lib/service/command_utils.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/service/lib/service/commands/configure.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/service/lib/service/commands/info.rb
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/service/lib/service/type.rb
+
+cat << EOF > $flight_ROOT/opt/service/etc/config.yml
+type_paths:
+  - $flight_ROOT/etc/service/types
+env_dir: $flight_ROOT/etc/service/env
+service_etc_dir: $flight_ROOT/var/lib/service
+service_state_dir: $flight_ROOT/var/run/service
+service_log_dir: $flight_ROOT/var/log/service
+EOF
+
+cat << EOF > $flight_ROOT/libexec/commands/service
+: '
+: NAME: service
+: SYNOPSIS: Manage HPC environment services
+: VERSION: $VERSION_SERVICE
+: ROOT: true
+: '
+if [ "\$UID" != 0 ]; then
+  exec sudo "\${flight_ROOT}"/bin/flight "\$(basename "\$0")" "\$@"
+fi
+export FLIGHT_CWD=\$(pwd)
+cd \${flight_ROOT}/opt/service
+export FLIGHT_PROGRAM_NAME="\${flight_NAME} \$(basename \$0)"
+flexec bundle exec bin/service "\$@"
+EOF
 
 #
 # Tidy up
