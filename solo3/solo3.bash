@@ -108,14 +108,14 @@ fi
 }
 
 # Install dependencies
-dnf config-manager --set-enabled crb
-dnf -y groupinstall "Development Tools"
-dnf install -y autoconf gcc rust patch make bzip2 openssl-devel libyaml-devel libffi-devel readline-devel zlib-devel gdbm-devel ncurses-devel
-dnf -y install wget # Used by flight env types
-dnf -y install epel-release # Use for some desktop deps, maybe some other stuff too?
+sudo dnf config-manager --set-enabled crb
+sudo dnf -y groupinstall "Development Tools"
+sudo dnf install -y autoconf gcc rust patch make bzip2 openssl-devel libyaml-devel libffi-devel readline-devel zlib-devel gdbm-devel ncurses-devel
+sudo dnf -y install wget # Used by flight env types
+sudo dnf -y install epel-release # Use for some desktop deps, maybe some other stuff too?
 
-setenforce 0 
-sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+sudo setenforce 0 
+sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 
 # Flight Runway
 clone_or_update https://github.com/openflighthpc/flight-runway $VERSION_RUNWAY $flight_ROOT
@@ -137,17 +137,17 @@ export PATH="$flight_ROOT/opt/ruby/bin:$PATH"
 cd $flight_ROOT/bin
 for a in bundle gem irb rake ruby ; do
   rm -f $a
-  ln -s $(which $a) $a
+  ln -sf $(which $a) $a
 done
 
 $flight_ROOT/bin/gem install paint --version 2.1.0 --bindir $flight_ROOT/opt/ruby/bin/ --no-document # Dep for banner stuff
 
 cd $flight_ROOT
 mkdir -p $flight_ROOT/opt/runway/bin/
-mv -f pkg/bin/flintegrate $flight_ROOT/opt/runway/bin/flintegrate
-mv -f pkg/bin/banner $flight_ROOT/opt/runway/bin/banner
-mv pkg/dist $flight_ROOT/opt/runway
-mv pkg/ruby/openflight* $flight_ROOT/opt/ruby/lib/ruby/site_ruby/*/x86_64-linux/
+cp -f pkg/bin/flintegrate $flight_ROOT/opt/runway/bin/flintegrate
+cp -f pkg/bin/banner $flight_ROOT/opt/runway/bin/banner
+rsync -au pkg/dist $flight_ROOT/opt/runway
+rsync -au pkg/ruby/openflight* $flight_ROOT/opt/ruby/lib/ruby/site_ruby/*/x86_64-linux/
 
 # Flight Starter
 clone_or_update https://github.com/openflighthpc/flight-starter $VERSION_STARTER /tmp/flight-starter
@@ -513,8 +513,8 @@ exec ${flight_ROOT}/opt/python/bin/python3 "$@"
 EOF
 
 cd $flight_ROOT/bin/
-ln -s python3 python
-ln -s pip3 pip
+ln -sf python3 python
+ln -sf pip3 pip
 
 chmod +x $flight_ROOT/bin/python* $flight_ROOT/bin/pip*
 
@@ -701,7 +701,7 @@ export PATH="$flight_ROOT/bin/:$PATH"
 yarn install
 yarn run build
 cd builder
-yarn add react-router-dom
+yarn add react-router-dom@6
 yarn install
 yarn run build
 cd ..
