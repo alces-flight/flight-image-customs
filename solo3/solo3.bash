@@ -154,6 +154,8 @@ clone_or_update https://github.com/openflighthpc/flight-starter $VERSION_STARTER
 sudo rsync -au /tmp/flight-starter/dist/etc/ /etc/
 rsync -au /tmp/flight-starter/dist/opt/flight/ $flight_ROOT/
 
+sed -i 's/File.exists/File.file/g' $flight_ROOT/libexec/flight-starter/config
+
 # Flight HowTo
 clone_or_update https://github.com/openflighthpc/flight-howto $VERSION_HOWTO $flight_ROOT/opt/howto
 
