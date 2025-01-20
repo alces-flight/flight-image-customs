@@ -8,6 +8,9 @@ set -e
 # Variables
 flight_ROOT="/opt/flight"
 
+# Script Execution
+SKIP_THIRD_PARTY=""  # Set to 'y' to skip doing compilation/installation of Ruby, Python, Nginx, etc. Useful for when rerunning script to update flight tools
+
 # Third Party Versions
 VERSION_RUBY_BUILD="v20240530.1"
 VERSION_RUBY=3.3.2
@@ -118,13 +121,16 @@ sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 clone_or_update https://github.com/openflighthpc/flight-runway $VERSION_RUNWAY $flight_ROOT
 
 # Ruby
-curl -sL https://github.com/rbenv/ruby-build/archive/refs/tags/$VERSION_RUBY_BUILD.tar.gz > /tmp/ruby-build.tar.gz
-mkdir /tmp/ruby-build
-cd /tmp/ruby-build
-tar --strip-components -xzf ruby-build.tar.gz
-PREFIX=$flight_ROOT/opt/ruby-build/ ./install.sh
+if [[ $SKIP_THIRD_PARTY != "y" ]] ; then
+    curl -sL https://github.com/rbenv/ruby-build/archive/refs/tags/$VERSION_RUBY_BUILD.tar.gz > /tmp/ruby-build.tar.gz
+    mkdir -p /tmp/ruby-build
+    cd /tmp/ruby-build
+    tar --strip-components 1 -xzf /tmp/ruby-build.tar.gz
+    PREFIX=$flight_ROOT/opt/ruby-build/ ./install.sh
 
-$flight_ROOT/opt/ruby-build/bin/ruby-build $VERSION_RUBY $flight_ROOT/opt/ruby/
+    $flight_ROOT/opt/ruby-build/bin/ruby-build $VERSION_RUBY $flight_ROOT/opt/ruby/
+fi
+
 export PATH="$flight_ROOT/opt/ruby/bin:$PATH"
 
 # Flight Runway Setup 
@@ -307,14 +313,16 @@ clone_or_update https://github.com/openflighthpc/flight-env-types $VERSION_ENV_T
 #
 
 # Nginx / WWW
-dnf -y install pcre-devel
-wget -O /tmp/nginx-${VERSION_NGINX}.tar.gz https://nginx.org/download/nginx-${VERSION_NGINX}.tar.gz
-cd /tmp/
-tar xf nginx-${VERSION_NGINX}.tar.gz
-cd nginx-${VERSION_NGINX}
-./configure --prefix=$flight_ROOT/opt/www/embedded --with-http_ssl_module --with-http_stub_status_module --with-ipv6 --with-debug --with-cc-opt="-L${flight_ROOT}/opt/www/embedded/lib -I${flight_ROOT}/opt/www/embedded/include" --with-ld-opt=-L${flight_ROOT}/opt/www/embedded/lib
-make -j $(nproc)
-make install
+if [[ $SKIP_THIRD_PARTY != "y" ]] ; then
+    sudo dnf -y install pcre-devel
+    wget -O /tmp/nginx-${VERSION_NGINX}.tar.gz https://nginx.org/download/nginx-${VERSION_NGINX}.tar.gz
+    cd /tmp/
+    tar xf nginx-${VERSION_NGINX}.tar.gz
+    cd nginx-${VERSION_NGINX}
+    ./configure --prefix=$flight_ROOT/opt/www/embedded --with-http_ssl_module --with-http_stub_status_module --with-ipv6 --with-debug --with-cc-opt="-L${flight_ROOT}/opt/www/embedded/lib -I${flight_ROOT}/opt/www/embedded/include" --with-ld-opt=-L${flight_ROOT}/opt/www/embedded/lib
+    make -j $(nproc)
+    make install
+fi
 
 mkdir -p $flight_ROOT/etc/www/
 cat << EOF > $flight_ROOT/etc/www/nginx.conf
@@ -344,7 +352,7 @@ http {
 }
 EOF
 
-mkdir $flight_ROOT/etc/logrotate.d/
+mkdir -p $flight_ROOT/etc/logrotate.d/
 cat << EOF > $flight_ROOT/etc/logrotate.d/www
 # Rotate Flight WWW logs
 $flight_ROOT/var/log/www/*.log {
@@ -424,16 +432,18 @@ sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/www/cert/lib/flight_cert/com
 sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/www/cert/lib/flight_cert/commands/enable_https.rb
 
 # Flight Python
-dnf -y install bzip2-devel
+if [[ $SKIP_THIRD_PARTY != "y" ]] ; then
+    sudo dnf -y install bzip2-devel
 
-wget -O /tmp/Python-$VERSION_PYTHON.tgz https://www.python.org/ftp/python/${VERSION_PYTHON}/Python-${VERSION_PYTHON}.tgz
-cd /tmp/
-tar xf Python-$VERSION_PYTHON.tgz
-cd Python-$VERSION_PYTHON
+    wget -O /tmp/Python-$VERSION_PYTHON.tgz https://www.python.org/ftp/python/${VERSION_PYTHON}/Python-${VERSION_PYTHON}.tgz
+    cd /tmp/
+    tar xf Python-$VERSION_PYTHON.tgz
+    cd Python-$VERSION_PYTHON
 
-./configure --enable-shared --prefix=$flight_ROOT/opt/python/ LDFLAGS="-Wl,--rpath=$flight_ROOT/opt/python/lib"
-make -j $(nproc)
-make -j $(nproc) install
+    ./configure --enable-shared --prefix=$flight_ROOT/opt/python/ LDFLAGS="-Wl,--rpath=$flight_ROOT/opt/python/lib"
+    make -j $(nproc)
+    make -j $(nproc) install
+fi
 
 # Biff tests to save ~75MB 
 #rm -rf $(find $flight_ROOT/opt/python/lib/python*/test $flight_ROOT/opt/python/lib/python*/*/test $flight_ROOT/opt/python/lib/python*/*/tests) #defo broke things running it like this
@@ -441,13 +451,14 @@ make -j $(nproc) install
 # Biff static libpython for ~25MB
 #rm -rf $(find $flight_ROOT/opt/python/lib/python*/config-*-x86_64-linux-gnu) # this might break things, don't think so but python borked
 
+# TODO: Ensure path is correct before doing links
 cd $flight_ROOT/opt/python/bin/
-ln -s python3 python
-ln -s pip3 pip
+ln -sf python3 python
+ln -sf pip3 pip
 
-for i in python3 python pip3 pip ; do 
-    ln -s $flight_ROOT/opt/python/bin/$i $flight_ROOT/bin/
-done
+#for i in python3 python pip3 pip ; do 
+#    ln -s $flight_ROOT/opt/python/bin/$i $flight_ROOT/bin/
+#done
 
 cat << 'EOF' > $flight_ROOT/bin/pip3
 _setup() {
@@ -584,6 +595,7 @@ fi
 EOF
 
 # Flight NodeJS
+if [[ $SKIP_THIRD_PARTY != "y" ]] ; then
 wget -O /tmp/node-v${VERSION_NODE}.tar.gz https://nodejs.org/dist/v${VERSION_NODE}/node-v${VERSION_NODE}-linux-x64.tar.gz
 cd /tmp/
 tar xf node-v${VERSION_NODE}.tar.gz
@@ -642,8 +654,10 @@ unset _setup
 exec /opt/flight/bin/node /opt/flight/opt/nodejs/bin/npm "$@"
 EOF
 chmod +x $flight_ROOT/bin/npm
+fi
 
 # Flight Yarn 
+if [[ $SKIP_THIRD_PARTY != "y" ]] ; then
 wget -O /tmp/yarn-v${VERSION_YARN}.tar.gz https://github.com/yarnpkg/yarn/releases/download/v${VERSION_YARN}/yarn-v${VERSION_YARN}.tar.gz
 cd /tmp/
 tar xf yarn-v${VERSION_YARN}.tar.gz
@@ -676,6 +690,7 @@ exec ${flight_ROOT}/bin/node \
      ${flight_ROOT}/opt/nodejs/bin/yarn.js "$@"
 EOF
 chmod +x $flight_ROOT/bin/yarn
+fi
 
 # Flight WebApp Components
 clone_or_update https://github.com/openflighthpc/flight-webapp-components $VERSION_WEBAPP_COMPONENTS /tmp/flight-webapp-components
