@@ -540,7 +540,7 @@ certbot = "*"
 certbot-nginx = "*"
 EOF
 
-PIPENV_VENV_IN_PROJECT=true
+export PIPENV_VENV_IN_PROJECT=true
 pipenv install
 mkdir -p bin
 for i in $(ls .venv/bin/) ; do 
