@@ -31,6 +31,7 @@ VERSION_CERT=0.6.1
 VERSION_LANDING_PAGE=2.0.2
 VERSION_WEBAPP_COMPONENTS=1.0.1
 VERSION_SERVICE=1.5.0
+VERSION_LOGIN=1.2.1
 
 # Execution Check
 
@@ -758,6 +759,307 @@ cd \${flight_ROOT}/opt/service
 export FLIGHT_PROGRAM_NAME="\${flight_NAME} \$(basename \$0)"
 flexec bundle exec bin/service "\$@"
 EOF
+
+# Flight Login 
+sudo dnf -y install pam-devel
+clone_or_update https://github.com/openflighthpc/flight-login-api $VERSION_LOGIN $flight_ROOT/opt/login-api
+
+cd $flight_ROOT/opt/login-api
+rm -f Gemfile.lock # TODO: Fix for jump from Ruby 2.7 -> 3.3.2
+sed -i "s|gem 'flight_configuration'.*|gem 'flight_configuration', github: 'openflighthpc/flight_configuration'|g" Gemfile #TODO: Implement this fix
+$flight_ROOT/bin/bundle config set --local path vendor
+$flight_ROOT/bin/bundle config set --local with default
+$flight_ROOT/bin/bundle config set --local without development
+$flight_ROOT/bin/bundle install
+
+sed -i 's/File.exists/File.file/g' $flight_ROOT/opt/login-api/lib/flight_login/configuration.rb
+
+cp etc/login-api.yaml $flight_ROOT/etc/ # don't think needed
+
+# TODO: Do this post-image creation because security (perhaps service file could do this?)
+secret_file=${flight_ROOT}/etc/shared-secret.conf
+if [ ! -f "${secret_file}" ] ; then
+    date +%s.%N | sha256sum | cut -c 1-40 > "${secret_file}"
+    chmod 0400 "${secret_file}"
+fi
+
+echo flight_ENVIRONMENT=integrated > .flight-environment
+
+cat << EOF > $flight_ROOT/etc/logrotate.d/login-api
+$flight_ROOT/var/log/login-api/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 640 nobody adm
+    sharedscripts
+      postrotate
+      [ -f $flight_ROOT/var/run/service/login-api.pid ] && kill -s HUP \`cat $flight_ROOT/var/run/service/login-api.pid\`
+    endscript
+}
+EOF
+
+mkdir -p $flight_ROOT/etc/service/env/
+cat << EOF > $flight_ROOT/etc/service/env/login-api
+# vim: set syn=sh:
+#==============================================================================
+# Copyright (C) 2021-present Alces Flight Ltd.
+#
+# This file is part of OpenFlight Omnibus Builder.
+#
+# This program and the accompanying materials are made available under
+# the terms of the Eclipse Public License 2.0 which is available at
+# <https://www.eclipse.org/legal/epl-2.0>, or alternative license
+# terms made available by Alces Flight Ltd - please direct inquiries
+# about licensing to licensing@alces-flight.com.
+#
+# This project is distributed in the hope that it will be useful, but
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR
+# IMPLIED INCLUDING, WITHOUT LIMITATION, ANY WARRANTIES OR CONDITIONS
+# OF TITLE, NON-INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A
+# PARTICULAR PURPOSE. See the Eclipse Public License 2.0 for more
+# details.
+#
+# You should have received a copy of the Eclipse Public License 2.0
+# along with this project. If not, see:
+#
+#  https://opensource.org/licenses/EPL-2.0
+#
+# For more information on OpenFlight Omnibus Builder, please visit:
+# https://github.com/openflighthpc/openflight-omnibus-builder
+#===============================================================================
+
+RACK_ENV=production
+flight_ENVIRONMENT=integrated
+PUMA_LOG_FILE=/opt/flight/var/log/login-api/puma.log
+EOF
+
+mkdir -p $flight_ROOT/etc/service/types/login-api/
+cat << EOF > $flight_ROOT/etc/service/types/login-api/metadata.yml
+:name: login-api
+:summary: API server for authenticating cluster users
+EOF
+
+cat << 'EOF' > $flight_ROOT/etc/service/types/login-api/start.sh
+# Have subshells inherit `set -x` for better debugging.
+export SHELLOPTS
+
+set -e
+
+# Ensure flight_ROOT is set
+if [ -z "$flight_ROOT" ]; then
+  echo "flight_ROOT has not been set!" >&2
+  exit 1
+fi
+
+# Required to correctly handle output parsing.
+if [ -f /etc/locale.conf ]; then
+  . /etc/locale.conf
+fi
+export LANG=${LANG:-en_US.UTF-8}
+
+# Create the temporary PID file
+pidfile=$(mktemp /tmp/flight-login-api-deletable.XXXXXXXX.pid)
+rm "${pidfile}"
+
+tool_bg ${flight_ROOT}/opt/login-api/bin/start "$pidfile"
+
+# Wait up to 10ish seconds for puma to start
+for _ in `seq 1 20`; do
+  sleep 0.5
+  if [ -f "$pidfile" ]; then
+    pid=$(cat "$pidfile" | tr -d "\n")
+  fi
+  if [ -n "$pid" ]; then
+    break
+  fi
+done
+
+# Ensure the pidfile is removed
+rm -f "$pidfile"
+
+# Report back the pid or error
+if [ -n "$pid" ]; then
+  # Wait a second to ensure puma is still running
+  sleep 1
+  kill -0 "$pid" 2>/dev/null
+  if [ "$?" -ne 0 ]; then
+    echo Failed to start login-api >&2
+    exit 2
+  fi
+
+  tool_set pid=$pid
+else
+  echo Failed to start login-api >&2
+  exit 1
+fi
+EOF
+
+cat << 'EOF' > $flight_ROOT/etc/service/types/login-api/stop.sh
+# Have subshells inherit `set -x` for better debugging.
+export SHELLOPTS
+
+pid_file="$1"
+if [ -z "$pid_file" ]; then
+  echo "The pid_file argument has not been provided!" >&2
+  exit 1
+fi
+if [ -z "$flight_ROOT" ]; then
+  echo "flight_ROOT has not been set!" >&2
+  exit 1
+fi
+if [ -z "$PUMA_LOG_FILE" ]; then
+  echo "PUMA_LOG_FILE has not been set!" >&2
+  exit 1
+fi
+
+# Ensure the log directory exists
+mkdir -p $(dirname "$PUMA_LOG_FILE")
+
+# Stop puma
+"${flight_ROOT}"/bin/flexec ruby ${flight_ROOT}/opt/login-api/bin/pumactl stop \
+  --pidfile $1 \
+  --config-file ${flight_ROOT}/opt/login-api/config/puma.rb \
+  >>"$PUMA_LOG_FILE" 2>&1
+EOF
+
+cat << 'EOF' > $flight_ROOT/etc/service/types/login-api/restart.sh
+# Have subshells (e.g., the start and stop commands below) inherit `set
+# -x` for better debugging.
+export SHELLOPTS
+
+# Ensure flight_ROOT is set
+if [ -z "$flight_ROOT" ]; then
+  echo "flight_ROOT has not been set!" >&2
+  exit 1
+fi
+
+PID_FILE="$1"
+OLD_PID="$(cat "$PID_FILE" | tr -d "\n")"
+
+${flight_ROOT}/etc/service/types/login-api/stop.sh "$PID_FILE"
+
+if [ -n "$OLD_PID" ] ; then
+  # Wait up to 10ish seconds for puma to stop
+  state=1
+  for _ in `seq 1 20`; do
+    sleep 0.5
+    kill -0 "$OLD_PID" 2>/dev/null
+    state=$?
+    if [ "$state" -ne 0 ]; then
+      break
+    fi
+  done
+
+  if [ "$state" -eq 0 ]; then
+    echo Failed to stop login-api
+    exit 1
+  fi
+fi
+
+${flight_ROOT}/etc/service/types/login-api/start.sh
+EOF
+
+cat << 'EOF' > $flight_ROOT/etc/service/types/login-api/reload.sh
+# Have subshells inherit `set -x` for better debugging.
+export SHELLOPTS
+
+pid_file="$1"
+if [ -z "$pid_file" ]; then
+  echo "The pid_file argument has not been provided!" >&2
+  exit 1
+fi
+if [ -z "$flight_ROOT" ]; then
+  echo "flight_ROOT has not been set!" >&2
+  exit 1
+fi
+if [ -z "$PUMA_LOG_FILE" ]; then
+  echo "PUMA_LOG_FILE has not been set!" >&2
+  exit 1
+fi
+
+# Ensure the log directory exists
+mkdir -p $(dirname "$PUMA_LOG_FILE")
+
+# Restarts the puma worker processes
+"${flight_ROOT}"/bin/flexec ruby ${flight_ROOT}/opt/login-api/bin/pumactl restart \
+  --pidfile $1 \
+  --config-file ${flight_ROOT}/opt/login-api/config/puma.rb \
+  >>"$PUMA_LOG_FILE" 2>&1
+
+# Sleeps two seconds and ensure puma is still running
+sleep 2
+kill -0 "$(cat "$pid_file")" 2>/dev/null
+if [ "$?" -ne 0]; then
+  echo Failed to reload login-api >&2
+  exit 2
+fi
+
+# Ensures the PID remains set (it hasn't changed)
+tool_set pid=$(cat "$pid_file")
+EOF
+
+cat << 'EOF' > $flight_ROOT/opt/login-api/bin/start
+#!/bin/bash
+pid_file="$1"
+if [ -z "$pid_file" ]; then
+  echo "The pid_file argument has not been provided!" >&2
+  exit 1
+fi
+if [ -z "$flight_ROOT" ]; then
+  echo "flight_ROOT has not been set!" >&2
+  exit 1
+fi
+if [ -z "$PUMA_LOG_FILE" ]; then
+  echo "PUMA_LOG_FILE has not been set!" >&2
+  exit 1
+fi
+
+# Ensure the log directory exists
+mkdir -p $(dirname "$PUMA_LOG_FILE")
+
+# Determine the install dir
+install_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+
+# Exec into the ruby/puma process so the PID does not change
+exec "${flight_ROOT}"/bin/flexec ruby $install_dir/bin/puma \
+  --config $install_dir/config/puma.rb \
+  --pidfile "$pid_file" \
+  --redirect-stdout "$PUMA_LOG_FILE" \
+  --redirect-stderr "$PUMA_LOG_FILE" \
+  --redirect-append \
+  --dir $install_dir \
+  >>"${PUMA_LOG_FILE}" 2>&1
+EOF
+
+chmod +x $flight_ROOT/opt/login-api/bin/start
+
+cat << 'EOF' >  $flight_ROOT/etc/www/server-https.d/login-api.conf
+location ^~ /login/api/ {
+  proxy_pass http://127.0.0.1:922/;
+  proxy_pass_request_headers on;
+  proxy_set_header HOST $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Real-Port $server_port;
+}
+EOF
+
+
+
+
+
+# For setting cookie domain
+cat << 'EOF' > $flight_ROOT/etc/flight-config-map.d/web-suite.yaml
+web-suite:
+  domain:
+    var: 'flight_WEB_SUITE_domain'
+    file: 'web-suite'
+EOF
+
 
 #
 # Tidy up
