@@ -29,6 +29,29 @@ VERSION_LANDING_PAGE=2.0.2
 VERSION_WEBAPP_COMPONENTS=1.0.1
 VERSION_SERVICE=1.5.0
 
+# Execution Check
+
+## Don't run if root
+if [[ $UID == 0 ]] ; then
+    echo "Don't run this script as root, it will break command usage for users on the system"
+    exit 1
+fi
+
+## Check this user can do sudo dnf
+if ! sudo dnf -v >> /dev/null ; then
+    echo "User is unable to do sudo of dnf command or incorrect password entered. Exiting."
+    exit 1
+fi 
+
+## Ensure flight_ROOT exists and is writeable to us
+if ! [[ -d $flight_ROOT && -w $flight_ROOT ]] ; then
+    echo "The directory $flight_ROOT does not exist or is not writeable by this user."
+    echo "Ensure the directory exists, is owned by this user and has 775 permissions."
+    exit 1
+fi
+
+## TODO: Maybe check that it's either empty or a valid git repo?
+
 
 # Functions 
 command_file() {
