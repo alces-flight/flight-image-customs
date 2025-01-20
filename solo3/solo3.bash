@@ -89,6 +89,21 @@ cat << EOF > $flight_ROOT/libexec/commands/$CMD
 EOF
 }
 
+clone_or_update() {
+# If directory is already present then we'll just do a pull and update
+# e.g. clone_or_update http://github.com/example/example v1.0.0 /opt/example
+REPO=$1
+VERS=$2
+DEST=$3
+if [ ! -d $DEST/.git ] ; then
+    git clone -b $VERS $REPO $DEST
+else
+    cd $DEST
+    git fetch
+    git checkout $VERS
+fi
+}
+
 # Install dependencies
 dnf config-manager --set-enabled crb
 dnf -y groupinstall "Development Tools"
@@ -100,7 +115,7 @@ setenforce 0
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 
 # Flight Runway
-git clone -b $VERSION_RUNWAY https://github.com/openflighthpc/flight-runway $flight_ROOT
+clone_or_update https://github.com/openflighthpc/flight-runway $VERSION_RUNWAY $flight_ROOT
 
 # Ruby
 curl -sL https://github.com/rbenv/ruby-build/archive/refs/tags/$VERSION_RUBY_BUILD.tar.gz > /tmp/ruby-build.tar.gz
@@ -129,11 +144,12 @@ mv pkg/dist $flight_ROOT/opt/runway
 mv pkg/ruby/openflight* $flight_ROOT/opt/ruby/lib/ruby/site_ruby/*/x86_64-linux/
 
 # Flight Starter
-git clone -b $VERSION_STARTER https://github.com/openflighthpc/flight-starter /tmp/flight-starter
-cp -Rv /tmp/flight-starter/dist/* /
+clone_or_update https://github.com/openflighthpc/flight-starter $VERSION_STARTER /tmp/flight-starter
+sudo rsync -au /tmp/flight-starter/dist/etc/ /etc/
+rsync -au /tmp/flight-starter/dist/opt/flight/ $flight_ROOT/
 
 # Flight HowTo
-git clone -b $VERSION_HOWTO https://github.com/openflighthpc/flight-howto $flight_ROOT/opt/howto
+clone_or_update https://github.com/openflighthpc/flight-howto $VERSION_HOWTO $flight_ROOT/opt/howto
 
 cd $flight_ROOT/opt/howto
 rm -f Gemfile.lock # TODO: Fix for jump from Ruby 2.7 -> 3.3.2
@@ -163,11 +179,11 @@ PRODUCT_DOMAIN: openflighthpc.org
 EOF
 
 # Flight Desktop
-git clone -b $VERSION_DESKTOP  https://github.com/openflighthpc/flight-desktop $flight_ROOT/opt/desktop
+clone_or_update https://github.com/openflighthpc/flight-desktop $VERSION_DESKTOP $flight_ROOT/opt/desktop
 
 cd $flight_ROOT/opt/desktop
 rm -f Gemfile.lock
-sed -i "s|gem 'xdg'.*|gem 'xdg', git: 'https://github.com/bkuhlmann/xdg'|g" Gemfile #TODO: Implement fix
+sed -i "s|gem 'xdg'.*|gem 'xdg'|g" Gemfile #TODO: Implement fix
 sed -i "s|gem 'flight_configuration'.*|gem 'flight_configuration', github: 'openflighthpc/flight_configuration'|g" Gemfile #TODO: Implement fix
 $flight_ROOT/bin/bundle config set --local path vendor
 $flight_ROOT/bin/bundle config set --local with default
@@ -210,14 +226,15 @@ EOF
 
 # Flight Desktop Types
 mkdir -p $flight_ROOT/usr/lib/desktop/
-git clone -b $VERSION_DESKTOP_TYPES https://github.com/openflighthpc/flight-desktop-types  $flight_ROOT/usr/lib/desktop/types
+clone_or_update https://github.com/openflighthpc/flight-desktop-types $VERSION_DESKTOP_TYPES $flight_ROOT/usr/lib/desktop/types
 
 # Flight Env 
-git clone -b $VERSION_ENV https://github.com/openflighthpc/flight-env $flight_ROOT/opt/env
+clone_or_update https://github.com/openflighthpc/flight-env $VERSION_ENV $flight_ROOT/opt/env
 
 cd $flight_ROOT/opt/env
 rm -f Gemfile.lock # TODO: Fix for jump from Ruby 2.7 -> 3.3.2
 echo "gem 'abbrev'" >> Gemfile # TODO: Fix for "warning: abbrev was loaded from the standard library, but will no longer be part of the default gems since Ruby 3.4.0"
+sed -i "s|gem 'xdg'.*|gem 'xdg'|g" Gemfile #TODO: Implement fix
 $flight_ROOT/bin/bundle config set --local path vendor
 $flight_ROOT/bin/bundle config set --local with default
 $flight_ROOT/bin/bundle config set --local without development
@@ -278,32 +295,7 @@ done
 
 # Flight Env Types
 mkdir -p $flight_ROOT/usr/lib/env/
-git clone -b $VERSION_ENV_TYPES https://github.com/openflighthpc/flight-env-types  $flight_ROOT/usr/lib/env/types
-
-# TODO: Fix this bug - works as expected after logout+in
-# [rocky@sfcleansource1 ~]$ flight env create conda@test
-# Creating environment conda@test
-#    > ✅ Verifying prerequisites
-#    > ✅ Fetching prerequisite (miniconda)
-#    > ✅ Creating environment (conda@test)
-# Environment conda@test has been created
-# [rocky@sfcleansource1 ~]$ flight env list
-# ┌────────────┬───────┐
-# │ Name       │ Scope │
-# ├────────────┼───────┤
-# │ conda@test │ user  │
-# └────────────┴───────┘
-# [rocky@sfcleansource1 ~]$ flight env activate conda
-# flight env: directly executed activation not possible; try --subshell, or: 'eval "$(flight_ENV_eval=true bin/flenv activate conda)"'
-
-# TODO: Fix this bug - Newer conda ? Newer Ruby? cannot resolve:
-# conda install tensorflow
-# But can resolve
-# conda install --solver classic tensorflow # actually this doesn't work
-# Could be forcibly overridden in our env stuff by setting CONDA_SOLVER to classic 
-# IT'S BECAUSE PYTHON 3.12 IS NOT YET SUPPORTED BY TENSORFLOW
-# TODO: Actually do some good version locking in Env Types stuff so we can prevent this from happening
-
+clone_or_update https://github.com/openflighthpc/flight-env-types $VERSION_ENV_TYPES $flight_ROOT/usr/lib/env/types
 
 # Flight Silo 
 
@@ -397,7 +389,7 @@ EOF
 
 
 # Flight Cert
-git clone -b $VERSION_CERT https://github.com/openflighthpc/flight-cert $flight_ROOT/opt/www/cert
+clone_or_update https://github.com/openflighthpc/flight-cert $VERSION_CERT $flight_ROOT/opt/www/cert
 
 cd $flight_ROOT/opt/www/cert
 rm -f Gemfile.lock # TODO: Fix for jump from Ruby 2.7 -> 3.3.2
@@ -537,15 +529,15 @@ EOF
 
 PIPENV_VENV_IN_PROJECT=true
 pipenv install
-mkdir bin
+mkdir -p bin
 for i in $(ls .venv/bin/) ; do 
-    ln -s ../.venv/bin/$i bin/$i
+    ln -sf ../.venv/bin/$i bin/$i
 done
 
 # Flight Landing Page
 mkdir -p $flight_ROOT/opt/www/src/
-git clone  -b $VERSION_LANDING_PAGE https://github.com/openflighthpc/flight-landing-page /tmp/landing-page 
-cp -a /tmp/landing-page/{bin,Gemfile,landing-page} $flight_ROOT/opt/www/landing-page
+clone_or_update https://github.com/openflighthpc/flight-landing-page $VERSION_LANDING_PAGE /tmp/landing-page 
+rsync -au /tmp/landing-page/{bin,Gemfile,landing-page} $flight_ROOT/opt/www/
 mkdir -p $flight_ROOT/opt/www/landing-page/branding/{content,layouts}
 
 mkdir -p $flight_ROOT/usr/share/www/downloads/config-packs/
@@ -686,7 +678,7 @@ EOF
 chmod +x $flight_ROOT/bin/yarn
 
 # Flight WebApp Components
-git clone -b $VERSION_WEBAPP_COMPONENTS https://github.com/openflighthpc/flight-webapp-components /tmp/flight-webapp-components
+clone_or_update https://github.com/openflighthpc/flight-webapp-components $VERSION_WEBAPP_COMPONENTS /tmp/flight-webapp-components
 cd /tmp/flight-webapp-components
 
 export REACT_APP_LOGIN_API_BASE_URL="/login/api/v0"
@@ -704,10 +696,11 @@ cp -vf builder/build/static/js/main.js $flight_ROOT/opt/www/landing-page/default
 cp -vf builder/build/static/css/main.css $flight_ROOT/opt/www/landing-page/default/content/styles/login.css
 
 # Flight Service 
-git clone -b $VERSION_SERVICE https://github.com/openflighthpc/flight-service $flight_ROOT/opt/service
+clone_or_update https://github.com/openflighthpc/flight-service $VERSION_SERVICE $flight_ROOT/opt/service
 
 cd $flight_ROOT/opt/service
 rm -f Gemfile.lock
+sed -i "s|gem 'xdg'.*|gem 'xdg'|g" Gemfile #TODO: Implement fix
 echo "gem 'abbrev'" >> Gemfile # TODO: Fix for "warning: abbrev was loaded from the standard library, but will no longer be part of the default gems since Ruby 3.4.0"
 #TODO: Bump commander-openflighthpc cos it's locked to old one
 $flight_ROOT/bin/bundle config set --local path vendor
